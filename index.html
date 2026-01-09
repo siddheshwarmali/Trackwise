@@ -78,10 +78,7 @@
                     <button type="button" onclick="wsRenameCurrent()" class="px-3 py-2 text-sm bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 flex items-center gap-2">
                         <i data-lucide="pencil" class="w-4 h-4"></i><span>Rename</span>
                     </button>
-                    <button type="button" onclick="wsDuplicateCurrent()" class="px-3 py-2 text-sm bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 flex items-center gap-2">
-                        <i data-lucide="copy" class="w-4 h-4"></i><span>Duplicate</span>
-                    </button>
-                    <button type="button" onclick="wsDeleteCurrent()" class="px-3 py-2 text-sm bg-red-50 text-red-700 rounded-md hover:bg-red-100 flex items-center gap-2">
+<button type="button" onclick="wsDeleteCurrent()" class="px-3 py-2 text-sm bg-red-50 text-red-700 rounded-md hover:bg-red-100 flex items-center gap-2">
                         <i data-lucide="trash-2" class="w-4 h-4"></i><span>Delete</span>
                     </button>
 
@@ -252,15 +249,18 @@
                 <div id="section-user-stories" class="mb-8 border-b pb-8 border-gray-200">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xl font-semibold text-gray-700 flex items-center cursor-pointer select-none hover:text-indigo-600"
-                            onclick="handleHeaderClick(null, 'us-upload-controls')"
-                            title="Double-click to toggle upload button">
+                            onclick="handleHeaderClick(() => toggleElement('us-action-controls'), null)"
+                            title="Click to show/hide actions">
                             <i data-lucide="list" class="w-5 h-5 mr-2 text-indigo-600"></i>User Story Tracker
                         </h3>
-                        <div class="flex items-center space-x-2 no-print">
+                        <div id="us-action-controls" class="flex items-center space-x-2 no-print hidden">
                              <button onclick="openAdoModal()" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition shadow-sm">
                                 <i data-lucide="cloud-lightning" class="w-4 h-4"></i><span class="text-sm font-medium">Sync ADO</span>
                             </button>
-                            <div id="us-upload-controls" class="hidden">
+                            <button onclick="openUsBugModal('US', null, activeUsStage || usStages[0])" class="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg cursor-pointer hover:bg-indigo-700 transition shadow-sm">
+                                <i data-lucide="plus" class="w-4 h-4"></i><span class="text-sm font-medium">Add Story</span>
+                            </button>
+                            <div id="us-upload-controls">
                                 <label class="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg cursor-pointer hover:bg-indigo-700 transition shadow-sm animate-fade-in">
                                     <i data-lucide="file-spreadsheet" class="w-4 h-4"></i><span class="text-sm font-medium">Upload Excel</span>
                                     <input type="file" accept=".xlsx,.xls" onchange="handleFileUpload(this, 'stories')" class="hidden" />
@@ -278,15 +278,18 @@
                 <div id="section-bugs" class="mb-8 border-b pb-8 border-gray-200">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xl font-semibold text-gray-700 flex items-center cursor-pointer select-none hover:text-red-600"
-                            onclick="handleHeaderClick(null, 'bug-upload-controls')"
-                            title="Double-click to toggle upload button">
+                            onclick="handleHeaderClick(() => toggleElement('bug-action-controls'), null)"
+                            title="Click to show/hide actions">
                             <i data-lucide="bug" class="w-5 h-5 mr-2 text-red-600"></i>Bugs Tracker
                         </h3>
-                        <div class="flex items-center space-x-2 no-print">
+                        <div id="bug-action-controls" class="flex items-center space-x-2 no-print hidden">
                              <button onclick="openAdoModal('bugs')" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition shadow-sm">
                                 <i data-lucide="cloud-lightning" class="w-4 h-4"></i><span class="text-sm font-medium">Sync ADO</span>
                             </button>
-                            <div id="bug-upload-controls" class="hidden">
+                            <button onclick="openUsBugModal('Bug', null, activeBugStage || bugStages[0])" class="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg cursor-pointer hover:bg-red-700 transition shadow-sm">
+                                <i data-lucide="plus" class="w-4 h-4"></i><span class="text-sm font-medium">Add Bug</span>
+                            </button>
+                            <div id="bug-upload-controls">
                                 <label class="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg cursor-pointer hover:bg-red-700 transition shadow-sm animate-fade-in">
                                     <i data-lucide="file-spreadsheet" class="w-4 h-4"></i><span class="text-sm font-medium">Upload Excel</span>
                                     <input type="file" accept=".xlsx,.xls" onchange="handleFileUpload(this, 'bugs')" class="hidden" />
@@ -415,6 +418,56 @@
             <div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-gray-800"><span id="us-modal-type-prefix">User Stories</span>: <span id="us-modal-stage" class="text-blue-600"></span></h3><p class="text-sm text-gray-500"><span id="us-modal-count">0</span> items in this stage</p></div><button onclick="closeModal('modal-us-details')"><i data-lucide="x" class="w-6 h-6 text-gray-500"></i></button></div>
             <div class="flex-1 overflow-auto custom-scroll border rounded-lg"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50 sticky top-0"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stage</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th></tr></thead><tbody id="us-details-tbody" class="bg-white divide-y divide-gray-200"></tbody></table></div>
             <div class="flex justify-end mt-6"><button onclick="closeModal('modal-us-details')" class="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">Close</button></div>
+        </div>
+    </div>
+
+
+
+    <!-- Add/Edit User Story / Bug Modal -->
+    <div id="modal-usbug" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg animate-fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h3 id="usbug-modal-title" class="text-lg font-semibold text-gray-800">Add Item</h3>
+                <button onclick="closeModal('modal-usbug')" class="text-gray-400 hover:text-gray-600" aria-label="Close">&times;</button>
+            </div>
+
+            <input type="hidden" id="usbug-datatype" />
+            <input type="hidden" id="usbug-mode" />
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">ID</label>
+                    <input id="usbug-id" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., US-123 / BUG-123" />
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Type</label>
+                    <input id="usbug-type" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., User Story / Bug" />
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Title</label>
+                    <textarea id="usbug-desc" rows="3" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Short title / description"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Stage</label>
+                    <select id="usbug-stage" class="w-full px-3 py-2 border rounded-lg text-sm"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Owner</label>
+                    <input id="usbug-owner" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Owner" />
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">ETA</label>
+                    <input id="usbug-eta" type="date" class="w-full px-3 py-2 border rounded-lg text-sm" />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between mt-6">
+                <button id="usbug-delete-btn" onclick="deleteUsBugFromModal()" class="px-4 py-2 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 hidden">Delete</button>
+                <div class="flex gap-2 ml-auto">
+                    <button onclick="closeModal('modal-usbug')" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">Cancel</button>
+                    <button onclick="saveUsBugFromModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Save</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1513,6 +1566,9 @@
 
         // --- GENERIC DETAILS MODAL ---
         function openDetailsModal(dataType, stage) {
+            // Remember context so CRUD actions can refresh the same view
+            window.__detailsContext = { dataType, stage };
+
             let items = [];
             let prefix = "";
             if (dataType === 'US') {
@@ -1529,22 +1585,128 @@
             document.getElementById('us-modal-stage').innerText = stage;
             document.getElementById('us-modal-count').innerText = items.length;
             const tbody = document.getElementById('us-details-tbody');
-            
-            if(items.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-500">No items found</td></tr>`;
+
+            if (items.length === 0) {
+                tbody.innerHTML = `<tr><td colspan=\"7\" class=\"p-8 text-center text-gray-500\">No items found</td></tr>`;
             } else {
-                tbody.innerHTML = items.map(s => `
-                    <tr class="hover:bg-gray-50 text-xs transition-colors">
-                        <td class="px-6 py-4 font-medium">${s.id}</td><td class="px-6 py-4"><span class="bg-gray-100 border rounded px-1">${s.type}</span></td><td class="px-6 py-4 truncate max-w-xs" title="${s.description}">${s.description}</td>
-                        <td class="px-6 py-4"><span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">${s.stage}</span></td>
-                        <td class="px-6 py-4">${s.owner}</td><td class="px-6 py-4">${s.eta}</td>
-                    </tr>
-                `).join('');
+                tbody.innerHTML = items.map(s => {
+                    const dt = (dataType === 'US') ? 'US' : 'Bug';
+                    const badgeClass = (dt === 'US') ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800';
+                    return `
+                        <tr class=\"hover:bg-gray-50 text-xs transition-colors\">
+                            <td class=\"px-6 py-4 font-medium\">${s.id}</td>
+                            <td class=\"px-6 py-4\"><span class=\"bg-gray-100 border rounded px-1\">${s.type}</span></td>
+                            <td class=\"px-6 py-4 truncate max-w-xs\" title=\"${s.description}\">${s.description}</td>
+                            <td class=\"px-6 py-4\"><span class=\"${badgeClass} px-2 py-1 rounded-full\">${s.stage}</span></td>
+                            <td class=\"px-6 py-4\">${s.owner}</td>
+                            <td class=\"px-6 py-4\">${s.eta}</td>
+                            <td class=\"px-6 py-4\">
+                                <div class=\"flex items-center gap-2\">
+                                    <button class=\"px-2 py-1 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100\" onclick=\"openUsBugModal('${dt}', '${s.id}', '${s.stage}')\">Edit</button>
+                                    <button class=\"px-2 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100\" onclick=\"deleteUsBug('${dt}', '${s.id}')\">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
             }
             document.getElementById('modal-us-details').classList.add('open');
         }
 
-        function renderBlockers() {
+        
+
+        // --- CRUD for User Stories & Bugs ---
+        function openUsBugModal(dataType, id = null, stagePref = null) {
+            const isUS = (dataType === 'US');
+            const list = isUS ? userStories : bugs;
+            const stages = isUS ? usStages : bugStages;
+
+            const mode = id ? 'edit' : 'new';
+            document.getElementById('usbug-datatype').value = dataType;
+            document.getElementById('usbug-mode').value = mode;
+
+            const stageSel = document.getElementById('usbug-stage');
+            stageSel.innerHTML = stages.map(s => `<option value=\"${s}\">${s}</option>`).join('');
+
+            const delBtn = document.getElementById('usbug-delete-btn');
+            delBtn.classList.toggle('hidden', mode !== 'edit');
+
+            if (mode === 'edit') {
+                const item = list.find(x => String(x.id) === String(id));
+                if (!item) { showAlert('Item not found', 'error'); return; }
+                document.getElementById('usbug-modal-title').innerText = isUS ? 'Edit User Story' : 'Edit Bug';
+                document.getElementById('usbug-id').value = item.id || '';
+                document.getElementById('usbug-type').value = item.type || (isUS ? 'User Story' : 'Bug');
+                document.getElementById('usbug-desc').value = item.description || '';
+                stageSel.value = item.stage || stages[0];
+                document.getElementById('usbug-owner').value = item.owner || '';
+                const eta = item.eta || '';
+                document.getElementById('usbug-eta').value = (/^\d{4}-\d{2}-\d{2}$/.test(eta) ? eta : '');
+            } else {
+                document.getElementById('usbug-modal-title').innerText = isUS ? 'Add User Story' : 'Add Bug';
+                const idPrefix = isUS ? 'US-' : 'BUG-';
+                document.getElementById('usbug-id').value = idPrefix + generateUUID().slice(0, 8);
+                document.getElementById('usbug-type').value = isUS ? 'User Story' : 'Bug';
+                document.getElementById('usbug-desc').value = '';
+                stageSel.value = stagePref || (isUS ? (activeUsStage || stages[0]) : (activeBugStage || stages[0]));
+                document.getElementById('usbug-owner').value = '';
+                document.getElementById('usbug-eta').value = '';
+            }
+
+            document.getElementById('modal-usbug').classList.add('open');
+            lucide.createIcons();
+        }
+
+        function saveUsBugFromModal() {
+            const dataType = document.getElementById('usbug-datatype').value;
+            const isUS = (dataType === 'US');
+            const list = isUS ? userStories : bugs;
+
+            const id = document.getElementById('usbug-id').value.trim();
+            const type = document.getElementById('usbug-type').value.trim() || (isUS ? 'User Story' : 'Bug');
+            const description = document.getElementById('usbug-desc').value.trim();
+            const stage = document.getElementById('usbug-stage').value;
+            const owner = document.getElementById('usbug-owner').value.trim();
+            const eta = document.getElementById('usbug-eta').value || '';
+
+            if (!id || id.length < 2) return showAlert('ID is required', 'error');
+            if (!description) return showAlert('Title is required', 'error');
+
+            const existingIdx = list.findIndex(x => String(x.id) === String(id));
+            const obj = { id, type, description, stage, owner, eta };
+
+            if (existingIdx >= 0) list[existingIdx] = Object.assign({}, list[existingIdx], obj);
+            else list.push(obj);
+
+            showAlert(isUS ? 'User Story saved' : 'Bug saved', 'success');
+            closeModal('modal-usbug');
+            if (typeof renderAll === 'function') renderAll();
+            if (window.__detailsContext && document.getElementById('modal-us-details').classList.contains('open')) {
+                openDetailsModal(window.__detailsContext.dataType, window.__detailsContext.stage);
+            }
+        }
+
+        function deleteUsBug(dataType, id) {
+            const isUS = (dataType === 'US');
+            const list = isUS ? userStories : bugs;
+            const idx = list.findIndex(x => String(x.id) === String(id));
+            if (idx < 0) return;
+            if (!confirm(`Delete ${isUS ? 'User Story' : 'Bug'}: ${id}? This cannot be undone.`)) return;
+            list.splice(idx, 1);
+            showAlert(isUS ? 'User Story deleted' : 'Bug deleted', 'success');
+            if (typeof renderAll === 'function') renderAll();
+            if (window.__detailsContext && document.getElementById('modal-us-details').classList.contains('open')) {
+                openDetailsModal(window.__detailsContext.dataType, window.__detailsContext.stage);
+            }
+        }
+
+        function deleteUsBugFromModal() {
+            const dataType = document.getElementById('usbug-datatype').value;
+            const id = document.getElementById('usbug-id').value.trim();
+            closeModal('modal-usbug');
+            deleteUsBug(dataType, id);
+        }
+function renderBlockers() {
             document.getElementById('blocker-count').innerText = blockers.filter(b=>!b.resolved).length;
             const list = document.getElementById('blocker-list');
             if(blockers.length === 0) {
@@ -2385,7 +2547,7 @@ window.onload = function() {
 // - Save writes to GitHub.
 // =========================
 
-const GH6_ENDPOINT = '/api/state';
+const GH6_ENDPOINT = '/.netlify/functions/state';
 const GH6_PARAM = 'dash';
 
 function gh6Overlay(show, msg) {
