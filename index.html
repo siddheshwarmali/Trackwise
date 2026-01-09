@@ -1,0 +1,2680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- SheetJS for Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    
+    <!-- html2canvas for Report Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f9fafb; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .modal { display: none; }
+        .modal.open { display: flex; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 300ms; }
+        .hidden-by-report { display: none !important; }
+        
+        .clickable-cell:hover { text-decoration: underline; cursor: pointer; color: #2563eb; font-weight: 600; }
+        [contenteditable] { padding: 4px 8px; border-radius: 4px; transition: all 0.2s; border: 1px solid transparent; }
+        [contenteditable]:hover { background-color: #f8fafc; border-color: #e2e8f0; }
+        [contenteditable]:focus { outline: none; background-color: #eff6ff; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
+        .l3-row:hover { background-color: #f8fafc; }
+        .l3-row:hover .delete-btn { opacity: 1; pointer-events: auto; }
+        .delete-btn { opacity: 0; transition: opacity 0.2s; }
+    </style>
+
+    <style>
+      @keyframes ghspin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+      /* Hide Clear Storage button */
+      button[onclick^="wsClearLocalStorage"], button[onclick="wsClearLocalStorage()"] { display:none !important; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="max-w-7xl mx-auto p-6 min-h-screen">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Executive Dashboard</h1>
+            <p class="text-gray-600">Comprehensive project and performance overview</p>
+        </div>
+
+        
+        <!-- Workspace Manager (NEW: Multi-dashboard + Local Save/Load) -->
+        <div class="bg-white rounded-lg shadow-md p-4 mb-6 animate-fade-in">
+            <div class="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <i data-lucide="folder" class="w-5 h-5 text-blue-600"></i>
+                    <span class="font-semibold text-gray-800">Workspace</span>
+                    <select id="ws-select" class="ml-1 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Loading…</option>
+                    </select>
+                    <span id="ws-saved-indicator" class="text-xs text-gray-500 ml-2">Not saved</span>
+                </div>
+
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button type="button" onclick="wsOpenCreateModal()" class="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2">
+                        <i data-lucide="plus" class="w-4 h-4"></i><span>New</span>
+                    </button>
+                    <button type="button" onclick="wsRenameCurrent()" class="px-3 py-2 text-sm bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 flex items-center gap-2">
+                        <i data-lucide="pencil" class="w-4 h-4"></i><span>Rename</span>
+                    </button>
+                    <button type="button" onclick="wsDuplicateCurrent()" class="px-3 py-2 text-sm bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 flex items-center gap-2">
+                        <i data-lucide="copy" class="w-4 h-4"></i><span>Duplicate</span>
+                    </button>
+                    <button type="button" onclick="wsDeleteCurrent()" class="px-3 py-2 text-sm bg-red-50 text-red-700 rounded-md hover:bg-red-100 flex items-center gap-2">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i><span>Delete</span>
+                    </button>
+
+                    <span class="mx-1 w-px h-8 bg-gray-200"></span>
+
+                    <button type="button" onclick="wsSaveNow()" class="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i><span>Save</span>
+                    </button>
+                    <button type="button" onclick="wsExportCurrent()" class="px-3 py-2 text-sm bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 flex items-center gap-2">
+                        <i data-lucide="download" class="w-4 h-4"></i><span>Export</span>
+                    </button>
+<button type="button" onclick="wsExportCurrentExcel()" class="px-3 py-2 text-sm bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 flex items-center gap-2">
+                        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i><span>Export Excel</span>
+                    </button>
+
+                    <label class="px-3 py-2 text-sm bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 flex items-center gap-2 cursor-pointer">
+                        <i data-lucide="upload" class="w-4 h-4"></i><span>Import</span>
+                        <input type="file" id="ws-import-file" accept="application/json" class="hidden" />
+                    </label>
+
+                    <button type="button" onclick="wsClearLocalStorage()" class="px-3 py-2 text-sm bg-gray-50 text-gray-700 rounded-md hover:bg-gray-100 flex items-center gap-2" title="Clears ONLY workspace data stored in this browser">
+                        <i data-lucide="database" class="w-4 h-4"></i><span>Clear Storage</span>
+                    </button>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+                Workspaces are saved locally in this browser. Use <span class="font-medium">Export</span> to back up or share, and <span class="font-medium">Import</span> to restore.
+            </p>
+        </div>
+<!-- Main Card -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <!-- Toolbar -->
+            <div class="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
+                <h2 class="text-2xl font-bold text-gray-800 flex items-center">
+                    <i data-lucide="activity" class="w-6 h-6 mr-2 text-blue-600"></i>
+                    Executive View
+                </h2>
+                <div class="flex bg-gray-100 p-1 rounded-lg">
+                    <button id="tab-build" onclick="switchTab('build')" class="flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-all bg-white text-blue-600 shadow-sm">
+                        <i data-lucide="hammer" class="w-4 h-4"></i><span>Build</span>
+                    </button>
+                    <button id="tab-run" onclick="switchTab('run')" class="flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-all text-gray-600 hover:text-gray-900">
+                        <i data-lucide="play" class="w-4 h-4"></i><span>Run</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- BUILD TAB CONTENT -->
+            <div id="content-build" class="animate-fade-in">
+                
+                <!-- Report Controls -->
+                <div class="flex justify-end gap-3 mb-4 no-print">
+                    <button onclick="openReportModal()" class="flex items-center space-x-2 px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition shadow-sm text-sm font-medium">
+                        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i><span>Customize View</span>
+                    </button>
+                    <button onclick="exportReport()" class="flex items-center space-x-2 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm text-sm font-medium">
+                        <i data-lucide="download" class="w-4 h-4"></i><span>Export Report</span>
+                    </button>
+                </div>
+
+                <!-- 0. Overall Summary Section -->
+                <div id="summary-section" class="mb-8 border-b pb-8 border-gray-200 hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-semibold text-gray-700 flex items-center">
+                            <i data-lucide="file-text" class="w-5 h-5 mr-2 text-purple-600"></i>Overall Summary
+                        </h3>
+                        <div class="flex space-x-2 no-print">
+                             <button onclick="regenerateSummary()" class="flex items-center space-x-2 px-3 py-1 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-xs font-medium" title="Regenerate based on current data">
+                                <i data-lucide="wand-2" class="w-3 h-3"></i><span>Auto-Gen</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="summary-display" 
+                         ondblclick="toggleSummaryEdit()"
+                         title="Double-click to edit summary"
+                         class="bg-purple-50 p-4 rounded-lg border border-purple-100 text-gray-700 text-sm leading-relaxed whitespace-pre-wrap cursor-pointer hover:bg-purple-100 transition-colors"></div>
+                    
+                    <div id="summary-edit" class="hidden">
+                        <textarea id="summary-input" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm h-32" placeholder="Enter executive summary..."></textarea>
+                        <div class="flex justify-between mt-2">
+                            <button onclick="deleteSummaryText()" class="px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200">Delete</button>
+                            <div class="space-x-2">
+                                <button onclick="cancelSummaryEdit()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
+                                <button onclick="saveSummary()" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700">Save</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1. Milestones Section -->
+                <div id="section-milestones" class="mb-8 border-b pb-8 border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-semibold text-gray-700 cursor-pointer hover:text-blue-600 select-none transition-colors"
+                            onclick="handleHeaderClick(openMilestoneModal, 'milestone-upload-controls')"
+                            title="Click to Add Milestone | Double click to Toggle Upload">
+                            Project Milestones - Application Tracker
+                        </h3>
+                        <div id="milestone-upload-controls" class="hidden flex items-center space-x-2 no-print">
+                            <label class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition animate-fade-in">
+                                <i data-lucide="upload" class="w-4 h-4"></i><span class="text-sm font-medium">Upload Excel</span>
+                                <input type="file" accept=".xlsx,.xls" onchange="handleFileUpload(this, 'milestones')" class="hidden" />
+                            </label>
+                        </div>
+                    </div>
+                    <div id="milestone-container" class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200 p-6 overflow-x-auto min-h-[150px] custom-scroll"></div>
+                    <div class="flex justify-center mt-4 pt-2 border-t border-blue-100 no-print">
+                        <button onclick="toggleTrackerDetails()" class="flex items-center justify-center p-2 rounded-full bg-white hover:bg-gray-50 text-gray-500 hover:text-blue-600 shadow-sm border border-gray-200 transition-all hover:shadow-md">
+                            <i id="tracker-arrow" data-lucide="chevron-down" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div id="milestone-details" class="mt-4 pt-4 border-t-2 border-blue-200 animate-fade-in hidden">
+                         <p class="text-sm font-semibold text-gray-700 mb-4">Application Tracker Status (Auto-calculated):</p>
+                         <div class="overflow-x-auto custom-scroll">
+                             <div id="milestone-cards" class="flex gap-3 pb-2" style="min-width: max-content"></div>
+                         </div>
+                    </div>
+                </div>
+
+                <!-- 2. Task Discipline Section -->
+                <div id="section-discipline" class="mb-8 border-b pb-8 border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-semibold text-gray-700 flex items-center cursor-pointer hover:text-teal-600 select-none transition-colors"
+                            onclick="handleHeaderClick(null, 'discipline-controls')"
+                            title="Double-click to toggle upload/edit buttons">
+                            <i data-lucide="table" class="w-5 h-5 mr-2 text-teal-600"></i>Task Discipline Status
+                        </h3>
+                        <div id="discipline-controls" class="hidden flex space-x-2 animate-fade-in no-print">
+                            <button onclick="openAdoModal('discipline')" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition shadow-sm">
+                                <i data-lucide="cloud-lightning" class="w-4 h-4"></i><span class="text-sm font-medium">Sync ADO</span>
+                            </button>
+                            
+                            <label class="flex items-center space-x-2 px-4 py-2 bg-teal-600 text-white rounded-lg cursor-pointer hover:bg-teal-700 transition shadow-sm">
+                                <i data-lucide="upload" class="w-4 h-4"></i><span class="text-sm font-medium">Upload Excel</span>
+                                <input type="file" accept=".xlsx,.xls" onchange="handleDisciplineUpload(this)" class="hidden" />
+                            </label>
+                            <button onclick="openDisciplineModal()" class="flex items-center space-x-2 px-4 py-2 bg-white text-teal-600 border border-teal-600 rounded-lg cursor-pointer hover:bg-teal-50 transition shadow-sm">
+                                <i data-lucide="edit-3" class="w-4 h-4"></i><span class="text-sm font-medium">Edit Data</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto rounded-lg border border-gray-200 shadow-sm mb-6 custom-scroll">
+                        <table class="min-w-full divide-y divide-gray-200" id="discipline-table">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Discipline</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Total</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Open</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Closed</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Hold</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Grand Total</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="discipline-tbody"></tbody>
+                        </table>
+                        <div class="bg-gray-50 p-2 border-t border-gray-200 flex justify-center no-print">
+                            <button onclick="toggleL2Details('ALL')" class="text-xs flex items-center text-teal-700 hover:text-teal-900 font-medium px-3 py-1 rounded hover:bg-teal-100 transition">
+                               <i id="l2-eye-icon" data-lucide="eye" class="w-3 h-3 mr-1"></i><span id="l2-btn-text">View All L2 Details</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="l2-container" class="mt-4 animate-fade-in border-t-2 border-teal-100 pt-4 hidden">
+                         <h4 id="l2-header-text" class="text-lg font-medium text-teal-800 mb-4 pl-2 border-l-4 border-teal-500">Detailed Activities</h4>
+                         <div id="l2-content" class="space-y-6"></div>
+                    </div>
+                </div>
+
+                <!-- 3. User Story Section -->
+                <div id="section-user-stories" class="mb-8 border-b pb-8 border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-semibold text-gray-700 flex items-center cursor-pointer select-none hover:text-indigo-600"
+                            onclick="handleHeaderClick(null, 'us-upload-controls')"
+                            title="Double-click to toggle upload button">
+                            <i data-lucide="list" class="w-5 h-5 mr-2 text-indigo-600"></i>User Story Tracker
+                        </h3>
+                        <div class="flex items-center space-x-2 no-print">
+                             <button onclick="openAdoModal()" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition shadow-sm">
+                                <i data-lucide="cloud-lightning" class="w-4 h-4"></i><span class="text-sm font-medium">Sync ADO</span>
+                            </button>
+                            <div id="us-upload-controls" class="hidden">
+                                <label class="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg cursor-pointer hover:bg-indigo-700 transition shadow-sm animate-fade-in">
+                                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i><span class="text-sm font-medium">Upload Excel</span>
+                                    <input type="file" accept=".xlsx,.xls" onchange="handleFileUpload(this, 'stories')" class="hidden" />
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" id="us-tiles"></div>
+                        <p class="text-xs text-gray-400 text-center mt-3 no-print">Double-click on a tile to view detailed User Stories</p>
+                    </div>
+                </div>
+
+                <!-- 3.5 Bugs Tracker Section -->
+                <div id="section-bugs" class="mb-8 border-b pb-8 border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-semibold text-gray-700 flex items-center cursor-pointer select-none hover:text-red-600"
+                            onclick="handleHeaderClick(null, 'bug-upload-controls')"
+                            title="Double-click to toggle upload button">
+                            <i data-lucide="bug" class="w-5 h-5 mr-2 text-red-600"></i>Bugs Tracker
+                        </h3>
+                        <div class="flex items-center space-x-2 no-print">
+                             <button onclick="openAdoModal('bugs')" class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition shadow-sm">
+                                <i data-lucide="cloud-lightning" class="w-4 h-4"></i><span class="text-sm font-medium">Sync ADO</span>
+                            </button>
+                            <div id="bug-upload-controls" class="hidden">
+                                <label class="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg cursor-pointer hover:bg-red-700 transition shadow-sm animate-fade-in">
+                                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i><span class="text-sm font-medium">Upload Excel</span>
+                                    <input type="file" accept=".xlsx,.xls" onchange="handleFileUpload(this, 'bugs')" class="hidden" />
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" id="bug-tiles"></div>
+                        <p class="text-xs text-gray-400 text-center mt-3 no-print">Double-click on a tile to view detailed Bugs</p>
+                    </div>
+                </div>
+
+                <!-- 4. Blockers Section -->
+                <div id="section-blockers" class="mb-8 border-b pb-8 border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-semibold text-gray-700 flex items-center cursor-pointer hover:text-blue-600 transition"
+                            onclick="openBlockerModal()"
+                            title="Click to add new blocker">
+                            <i data-lucide="alert-circle" class="w-5 h-5 mr-2 text-red-500"></i>Active Blockers (<span id="blocker-count">0</span>)
+                        </h3>
+                    </div>
+                    <div id="blocker-list" class="space-y-3"></div>
+                </div>
+
+                <!-- 5. KPI Section -->
+                <div id="section-kpi" class="mb-8 border-b pb-8 border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-semibold text-gray-700 flex items-center cursor-pointer select-none"
+                            onclick="handleHeaderClick(openKPIModal, 'kpi-upload-controls')"
+                            title="Click to Add KPI | Double click to show/hide upload option">
+                            <i data-lucide="bar-chart-2" class="w-5 h-5 mr-2 text-blue-600"></i>Key Performance Indicators
+                        </h3>
+                        <div id="kpi-upload-controls" class="hidden no-print">
+                             <label class="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition shadow-sm animate-fade-in">
+                                <i data-lucide="database" class="w-4 h-4"></i><span class="text-sm font-medium">Upload KPI Excel</span>
+                                <input type="file" accept=".xlsx,.xls" onchange="handleFileUpload(this, 'kpi')" class="hidden" />
+                            </label>
+                        </div>
+                    </div>
+                    <div id="kpi-container" class="space-y-6"></div>
+                </div>
+
+                <!-- 6. BAU Section -->
+                <div id="section-bau">
+                    <h4 class="text-lg font-medium text-gray-700 mb-3">BAU (Business As Usual) Update</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs text-gray-600 mb-1">Total Tickets</p><p id="bau-total" class="text-xl font-bold text-slate-600">0</p></div>
+                        <div class="bg-green-50 p-3 rounded-lg border border-green-200"><p class="text-xs text-gray-600 mb-1">Within SLA</p><p id="bau-within" class="text-xl font-bold text-green-600">0</p></div>
+                        <div class="bg-red-50 p-3 rounded-lg border border-red-200"><p class="text-xs text-gray-600 mb-1">Breached SLA</p><p id="bau-breached" class="text-xl font-bold text-red-600">0</p></div>
+                        <div class="bg-blue-50 p-3 rounded-lg border border-blue-200"><p class="text-xs text-gray-600 mb-1">SLA %</p><p id="bau-sla" class="text-xl font-bold text-blue-600">0%</p></div>
+                    </div>
+                </div>
+
+            </div>
+            <!-- END BUILD TAB -->
+
+            <!-- RUN TAB CONTENT (IFrame Container) -->
+            <div id="content-run" class="animate-fade-in hidden h-[800px] w-full bg-[#0f172a] rounded-lg overflow-hidden">
+                <iframe id="run-iframe" class="w-full h-full border-0"></iframe>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- L3 Task View Modal (New Task Management) -->
+    <div id="modal-l3" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-5xl h-[85vh] flex flex-col animate-fade-in">
+            <div class="flex justify-between items-center mb-6 border-b pb-4">
+                <div>
+                    <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                        <i data-lucide="layers" class="w-5 h-5 mr-2 text-teal-600"></i>
+                        <span id="l3-title">Task Details</span>
+                    </h3>
+                    <p class="text-sm text-gray-500 mt-1">Manage individual tasks for this discipline</p>
+                </div>
+                <button onclick="closeModal('modal-l3')" class="hover:bg-gray-100 p-1 rounded-full"><i data-lucide="x" class="w-6 h-6 text-gray-500"></i></button>
+            </div>
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm font-medium text-gray-700">Status:</span>
+                    <select id="l3-filter-status" onchange="renderL3Table()" class="text-sm border rounded p-1 bg-gray-50">
+                        <option value="ALL">All</option>
+                        <option value="Open">Open</option>
+                        <option value="Closed">Closed</option>
+                        <option value="Hold">Hold</option>
+                    </select>
+                </div>
+                <button onclick="toggleL3Form()" class="flex items-center space-x-2 px-3 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium shadow-sm transition">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i><span>Add New Task</span>
+                </button>
+            </div>
+            <div id="l3-form" class="hidden bg-gray-50 p-4 rounded-lg border border-teal-100 mb-4 animate-fade-in">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500 mb-1">Task Title *</label><input type="text" id="l3-input-title" class="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-teal-500" placeholder="Task description..."></div>
+                    <div><label class="block text-xs font-medium text-gray-500 mb-1">Status</label><select id="l3-input-status" class="w-full border p-2 rounded text-sm"><option value="Open">Open</option><option value="Closed">Closed</option><option value="Hold">Hold</option></select></div>
+                    <div><label class="block text-xs font-medium text-gray-500 mb-1">Owner</label><input type="text" id="l3-input-owner" class="w-full border p-2 rounded text-sm" placeholder="Assignee"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                     <div><label class="block text-xs font-medium text-gray-500 mb-1">ETA</label><input type="date" id="l3-input-eta" class="w-full border p-2 rounded text-sm"></div>
+                </div>
+                <div class="flex justify-end space-x-2"><button onclick="toggleL3Form()" class="px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300">Cancel</button><button onclick="saveL3Task()" class="px-3 py-1 bg-teal-600 text-white rounded text-sm hover:bg-teal-700">Save Task</button></div>
+            </div>
+            <div class="flex-1 overflow-auto custom-scroll border rounded-lg bg-white">
+                <table class="min-w-full divide-y divide-gray-200 relative"><thead class="bg-gray-50 sticky top-0 z-10"><tr id="l3-thead-row"></tr></thead><tbody id="l3-tbody" class="bg-white divide-y divide-gray-200 text-sm"></tbody></table>
+                <div id="l3-empty" class="hidden p-8 text-center text-gray-400 italic">No tasks found. Add manually or Sync ADO.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Customization Modal -->
+    <div id="modal-report-config" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm animate-fade-in">
+            <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold text-gray-800">Customize Report</h3><button onclick="closeModal('modal-report-config')"><i data-lucide="x" class="w-5 h-5 text-gray-500"></i></button></div>
+            <p class="text-sm text-gray-500 mb-4">Select sections to display:</p>
+            <div id="report-toggles" class="space-y-3 mb-6 max-h-[60vh] overflow-y-auto custom-scroll p-1"></div>
+            <div class="flex justify-end space-x-3"><button onclick="selectAllSections(true)" class="text-sm text-blue-600 hover:text-blue-800 mr-auto self-center">Select All</button><button onclick="applyReportView()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">Apply View</button></div>
+        </div>
+    </div>
+
+    <!-- Details Modal (Used for US and Bugs) -->
+    <div id="modal-us-details" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl h-[80vh] flex flex-col animate-fade-in">
+            <div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-gray-800"><span id="us-modal-type-prefix">User Stories</span>: <span id="us-modal-stage" class="text-blue-600"></span></h3><p class="text-sm text-gray-500"><span id="us-modal-count">0</span> items in this stage</p></div><button onclick="closeModal('modal-us-details')"><i data-lucide="x" class="w-6 h-6 text-gray-500"></i></button></div>
+            <div class="flex-1 overflow-auto custom-scroll border rounded-lg"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50 sticky top-0"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stage</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th></tr></thead><tbody id="us-details-tbody" class="bg-white divide-y divide-gray-200"></tbody></table></div>
+            <div class="flex justify-end mt-6"><button onclick="closeModal('modal-us-details')" class="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">Close</button></div>
+        </div>
+    </div>
+
+    <!-- Milestone Modal -->
+    <div id="modal-milestone" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md animate-fade-in">
+            <div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-gray-800" id="milestone-modal-title">Add New Milestone</h3><button onclick="closeModal('modal-milestone')"><i data-lucide="x" class="w-6 h-6 text-gray-500"></i></button></div>
+            <div class="space-y-4"><input type="hidden" id="ms-index"><div><label class="block text-sm font-medium text-gray-700 mb-1">Activity Name *</label><input type="text" id="ms-phase" class="w-full border border-gray-300 rounded-lg p-2"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Planned Start *</label><input type="date" id="ms-start" class="w-full border border-gray-300 rounded-lg p-2"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Planned End *</label><input type="date" id="ms-end" class="w-full border border-gray-300 rounded-lg p-2"></div></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Actual Start</label><input type="date" id="ms-act-start" class="w-full border border-gray-300 rounded-lg p-2"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Actual End</label><input type="date" id="ms-act-end" class="w-full border border-gray-300 rounded-lg p-2"></div></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Remark</label><textarea id="ms-remark" class="w-full border border-gray-300 rounded-lg p-2 h-20"></textarea></div></div>
+            <div class="flex justify-end space-x-3 mt-6"><button id="btn-delete-ms" onclick="deleteMilestone()" class="px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium mr-auto hidden">Delete</button><button onclick="closeModal('modal-milestone')" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button><button onclick="saveMilestone()" class="px-6 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">Save</button></div>
+        </div>
+    </div>
+
+    <!-- Blocker Modal -->
+    <div id="modal-blocker" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md animate-fade-in">
+            <h3 class="text-lg font-bold text-gray-800 mb-4" id="blocker-modal-title">Add New Blocker</h3>
+            <div class="space-y-3"><input type="hidden" id="bl-id"><input type="text" id="bl-title" class="w-full px-3 py-2 border rounded-md text-sm" placeholder="Title *"><select id="bl-severity" class="w-full px-3 py-2 border rounded-md text-sm"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select><input type="text" id="bl-owner" class="w-full px-3 py-2 border rounded-md text-sm" placeholder="Owner *"><input type="text" id="bl-eta" class="w-full px-3 py-2 border rounded-md text-sm" placeholder="ETA *"></div>
+            <div class="flex justify-end space-x-2 mt-6"><button onclick="closeModal('modal-blocker')" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm">Cancel</button><button onclick="saveBlocker()" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm">Save</button></div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="modal-delete-confirm" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center animate-fade-in">
+             <h3 class="text-lg font-bold text-gray-900 mb-2">Delete Item?</h3><p class="text-sm text-gray-500 mb-6">Are you sure? This cannot be undone.</p><input type="hidden" id="delete-target-id"><input type="hidden" id="delete-type">
+             <div class="flex justify-center space-x-3"><button onclick="closeModal('modal-delete-confirm')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded text-sm">Cancel</button><button onclick="confirmDelete()" class="px-4 py-2 bg-red-600 text-white rounded text-sm">Delete</button></div>
+        </div>
+    </div>
+
+    <!-- KPI Modal -->
+    <div id="modal-kpi" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg animate-fade-in">
+            <div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-gray-800" id="kpi-modal-title">Add/Edit KPI</h3><button onclick="closeModal('modal-kpi')"><i data-lucide="x" class="w-6 h-6 text-gray-500"></i></button></div>
+            <div class="space-y-4"><input type="hidden" id="kpi-index"><div><label class="block text-sm font-medium text-gray-700 mb-1">Category</label><input type="text" id="kpi-category" class="w-full border border-gray-300 rounded-lg p-2" placeholder="e.g. Performance"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">KPI Name</label><input type="text" id="kpi-name" class="w-full border border-gray-300 rounded-lg p-2"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Current Value</label><input type="text" id="kpi-value" class="w-full border border-gray-300 rounded-lg p-2"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Threshold</label><input type="text" id="kpi-threshold" class="w-full border border-gray-300 rounded-lg p-2"></div></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Frequency</label><input type="text" id="kpi-freq" class="w-full border border-gray-300 rounded-lg p-2"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Tool</label><input type="text" id="kpi-tool" class="w-full border border-gray-300 rounded-lg p-2"></div></div></div>
+            <div class="flex justify-end space-x-3 mt-6"><button id="btn-delete-kpi" onclick="deleteKPI()" class="px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium mr-auto hidden">Delete</button><button onclick="closeModal('modal-kpi')" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button><button onclick="saveKPI()" class="px-6 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">Save</button></div>
+        </div>
+    </div>
+
+    <!-- ADO Sync Modal -->
+    <div id="modal-ado" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg animate-fade-in">
+            <div class="flex justify-between items-center mb-4"><div class="flex items-center"><i data-lucide="cloud-lightning" class="w-6 h-6 text-blue-600 mr-2"></i><h3 class="text-xl font-bold text-gray-800">Sync with Azure DevOps</h3></div><button onclick="closeModal('modal-ado')"><i data-lucide="x" class="w-6 h-6 text-gray-500"></i></button></div>
+            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 text-sm text-blue-800 mb-4"><p><strong>Note on CORS:</strong> Direct API calls from local files (`file://`) are blocked by modern browsers.</p></div>
+            <div id="ado-error" class="hidden bg-red-50 p-3 rounded-lg border border-red-200 text-sm text-red-800 mb-4 break-words"></div>
+            <div class="space-y-4 mb-6"><div><label class="block text-sm font-medium text-gray-700 mb-1">Organization</label><input type="text" id="ado-org" value="BFLDevOpsOrg" class="w-full border border-gray-300 rounded-lg p-2"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Project</label><input type="text" id="ado-proj" value="3in1 Agile Board_MarTech" class="w-full border border-gray-300 rounded-lg p-2"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Query ID</label><input type="text" id="ado-query" value="3a6725c4-6a00-43ff-ac2a-ed550c633088" class="w-full border border-gray-300 rounded-lg p-2 font-mono text-sm"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">PAT Token</label><input type="password" id="ado-pat" class="w-full border border-gray-300 rounded-lg p-2" placeholder="Enter your Personal Access Token"></div></div>
+            <div class="flex justify-end space-x-3"><button onclick="loadMockAdoData()" class="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-200">Load Mock Data (Demo)</button><button onclick="closeModal('modal-ado')" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button><button id="btn-sync-ado" onclick="handleAdoSync()" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center">Sync Now</button></div>
+        </div>
+    </div>
+
+    <!-- User Mapping Modal -->
+    <div id="modal-mapping" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl animate-fade-in flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center mb-4 border-b pb-2"><h3 class="text-xl font-bold text-gray-800">Map Users to Disciplines</h3><button onclick="closeModal('modal-mapping')"><i data-lucide="x" class="w-6 h-6 text-gray-500"></i></button></div>
+            <div class="flex-1 overflow-y-auto custom-scroll border rounded-lg p-4 bg-gray-50 mb-4"><div id="mapping-container" class="space-y-3"></div></div>
+            <div class="flex justify-end space-x-3 pt-2 border-t"><button onclick="closeModal('modal-mapping')" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button><button onclick="applyDisciplineMapping()" class="px-6 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">Apply & Process</button></div>
+        </div>
+    </div>
+
+    <!-- Discipline Edit Modal (Tabs L1/L2) -->
+    <div id="modal-discipline" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-6xl h-[90vh] flex flex-col animate-fade-in">
+            <div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-gray-800">Edit Task Discipline</h3><button onclick="closeModal('modal-discipline')"><i data-lucide="x" class="w-6 h-6 text-gray-500"></i></button></div>
+            <div class="flex space-x-2 mb-4 border-b border-gray-200"><button id="tab-l1-btn" onclick="switchDiscTab('L1')" class="px-4 py-2 text-sm font-medium border-b-2 border-teal-600 text-teal-600">L1 Summary</button><button id="tab-l2-btn" onclick="switchDiscTab('L2')" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500">L2 Detailed</button></div>
+            <div id="disc-tab-content" class="flex-1 overflow-auto p-1 custom-scroll"></div>
+            <div class="flex justify-end mt-4 pt-2 border-t border-gray-200"><button onclick="saveDisciplineData()" class="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium">Save & Close</button></div>
+        </div>
+    </div>
+
+    <!-- TEMPLATE FOR RUN TAB -->
+    <template id="run-dashboard-template">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Headless CMS Authoring Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0f172a 100%); min-height: 100vh; padding: 20px; color: white; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { margin-bottom: 40px; text-align: center; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 10px; font-weight: 700; background: linear-gradient(to right, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header p { color: #93c5fd; font-size: 1.1rem; }
+        .controls-container { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 15px; padding: 30px; margin-bottom: 40px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.2); display: flex; align-items: center; justify-content: center; gap: 20px; }
+        .file-input { display: none; }
+        .btn { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(59, 130, 246, 0.4); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-generate { background: linear-gradient(135deg, #10b981, #059669); }
+        .btn-sync { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+        .btn-download { background: linear-gradient(135deg, #f59e0b, #d97706); margin-top: 20px; padding: 15px 30px; font-size: 1.1rem; box-shadow: 0 8px 32px rgba(245, 158, 11, 0.4); display: inline-block; }
+        .btn-download:hover { box-shadow: 0 12px 40px rgba(245, 158, 11, 0.6); }
+        .download-section { text-align: center; margin: 40px 0; }
+        .status-text { color: #93c5fd; font-size: 1rem; font-family: monospace; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 40px; }
+        .kpi-card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 15px; padding: 30px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.2); transition: transform 0.3s ease; cursor: pointer; }
+        .kpi-card:hover { transform: translateY(-5px); }
+        .kpi-card.blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+        .kpi-card.green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .kpi-card.red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        .kpi-card.purple { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); }
+        .kpi-label { font-size: 0.9rem; opacity: 0.9; margin-bottom: 10px; }
+        .kpi-value { font-size: 3rem; font-weight: 700; }
+        .charts-grid { display: grid; grid-template-columns: 1fr; gap: 30px; margin-bottom: 40px; }
+        .chart-card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 15px; padding: 30px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.2); }
+        .chart-container { position: relative; height: 350px; }
+        .full-width { grid-column: 1 / -1; }
+        .table-container { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 15px; padding: 30px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.2); overflow-x: auto; margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 15px; text-align: left; }
+        th { background: rgba(255, 255, 255, 0.1); font-weight: 600; border-bottom: 2px solid rgba(255, 255, 255, 0.2); }
+        tr:hover { background: rgba(255, 255, 255, 0.05); cursor: pointer; }
+        .badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 0.9rem; font-weight: 600; }
+        .badge-green { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+        .badge-red { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+        .badge-yellow { background: rgba(251, 191, 36, 0.2); color: #fde047; }
+        .footer { text-align: center; color: #93c5fd; margin-top: 40px; padding: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+        #dashboard { display: none; }
+        #dashboard.active { display: block; }
+        .alert { padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; text-align: center; }
+        .alert-error { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: #1e293b; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 30px; width: 90%; max-width: 900px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); position: relative; color: white; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .modal-title { font-size: 1.5rem; font-weight: 700; background: linear-gradient(to right, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .close-btn { background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; transition: color 0.3s; }
+        .close-btn:hover { color: white; }
+        .form-group { margin-bottom: 15px; }
+        .form-label { display: block; margin-bottom: 8px; font-size: 0.9rem; color: #93c5fd; }
+        .form-input { width: 100%; padding: 10px 15px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; font-size: 1rem; outline: none; }
+        .form-input:focus { border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2); }
+        .form-select { width: 100%; padding: 10px 15px; background: #0f172a; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; font-size: 1rem; outline: none; }
+        .action-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .edit-btn { padding: 5px 10px; background: rgba(59, 130, 246, 0.2); color: #60a5fa; border-radius: 6px; cursor: pointer; font-size: 0.8rem; margin-right: 5px; }
+        .edit-btn:hover { background: rgba(59, 130, 246, 0.4); }
+        .delete-btn { padding: 5px 10px; background: rgba(239, 68, 68, 0.2); color: #f87171; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .delete-btn:hover { background: rgba(239, 68, 68, 0.4); }
+    </style>
+
+    <style>
+      @keyframes ghspin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+      /* Hide Clear Storage button */
+      button[onclick^="wsClearLocalStorage"], button[onclick="wsClearLocalStorage()"] { display:none !important; }
+    </style>
+</head>
+<body>
+
+<div id="gh-reset-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.55);backdrop-filter:blur(4px);">
+  <div style="position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);background:#0b1220; color:#fff; padding:18px 20px;border-radius:14px; width:min(520px,92vw); border:1px solid rgba(255,255,255,0.12); box-shadow:0 12px 40px rgba(0,0,0,0.35);">
+    <div style="display:flex;gap:12px;align-items:center;">
+      <div style="width:22px;height:22px;border-radius:999px;border:3px solid rgba(255,255,255,0.25);border-top-color:#22c55e;animation:ghspin 0.8s linear infinite;"></div>
+      <div>
+        <div style="font-weight:700;font-size:14px;">Loading dashboard…</div>
+        <div id="gh-reset-msg" style="opacity:0.85;font-size:12px;margin-top:2px;">Resetting view and fetching from GitHub</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <div class="container">
+        <!-- Controls First -->
+        <div class="controls-container">
+            <input type="file" id="fileInput" class="file-input" accept=".xlsx, .xls, .csv" />
+            <button class="btn" onclick="document.getElementById('fileInput').click()">📁 Choose Excel/CSV File</button>
+            <span class="status-text" style="opacity:0.7">OR</span>
+            <button class="btn btn-sync" id="syncAdoBtn" onclick="requestAdoSync()">
+                <i data-lucide="cloud-lightning" class="w-4 h-4"></i> Sync from ADO
+            </button>
+            <span id="fileName" class="status-text">No file chosen</span>
+            <button class="btn btn-generate" id="processBtn" onclick="processData()" disabled>🚀 Generate Report</button>
+        </div>
+
+        <!-- Capture Region for Download -->
+        <div id="capture-region">
+            <div class="header">
+                <h1>🎯 Headless CMS Authoring Dashboard</h1>
+                <p>Authoring Weekly Report (Total Closed Headless Run Task)</p>
+            </div>
+            <div id="alertContainer"></div>
+            <div id="dashboard">
+                <div class="kpi-grid">
+                    <div class="kpi-card blue" ondblclick="openTicketList('all')"><div class="kpi-label">Total Tickets</div><div class="kpi-value" id="totalTickets">0</div></div>
+                    <div class="kpi-card green" ondblclick="openTicketList('status', 'onTime')"><div class="kpi-label">On Time Delivery</div><div class="kpi-value" id="onTimeTickets">0</div></div>
+                    <div class="kpi-card red" ondblclick="openTicketList('status', 'breached')"><div class="kpi-label">SLA Breached</div><div class="kpi-value" id="breachedTickets">0</div></div>
+                    <div class="kpi-card purple" ondblclick="openTicketList('all')"><div class="kpi-label">SLA Achievement</div><div class="kpi-value" id="slaPercentage">0%</div></div>
+                </div>
+                <div class="charts-grid" id="chartsArea">
+                    <div class="chart-card" id="pieChartCard"><h2>📊 SLA Performance Overview</h2><div class="chart-container"><canvas id="pieChart"></canvas></div></div>
+                </div>
+                <div class="table-container" id="summaryTableSection">
+                    <h2 style="color: #93c5fd; margin-bottom: 20px;">📋 Ticket Type Summary</h2>
+                    <table id="summaryTable"><thead><tr><th>Ticket Type</th><th style="text-align: center;">Threshold (hrs)</th><th style="text-align: center;">Total Count</th><th style="text-align: center;">On Time</th><th style="text-align: center;">Breached</th><th style="text-align: center;">Avg Time (hrs)</th><th style="text-align: center;">SLA %</th></tr></thead><tbody id="tableBody"></tbody></table>
+                </div>
+                <div class="chart-card full-width" id="barChartSection"><h2>📈 Ticket Type Distribution & SLA Status</h2><div class="chart-container" style="height: 550px; padding-top: 20px;"><canvas id="barChart"></canvas></div></div>
+            </div>
+        </div>
+
+        <div class="download-section" id="downloadSection">
+            <button class="btn btn-download" onclick="downloadReportAsJPG()" id="downloadBtn">📸 Download Complete Report as JPG</button>
+        </div>
+        <div class="footer"><p>Dashboard refreshed: <span id="currentTime"></span></p></div>
+    </div>
+
+    <!-- LIST MODAL -->
+    <div id="listModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h3 class="modal-title" id="listModalTitle">Ticket Details</h3><button class="close-btn" onclick="closeListModal()">×</button></div>
+            <div style="margin-bottom: 15px; display:flex; justify-content:flex-end;"><button class="btn btn-sync" onclick="addTicket()" style="padding: 8px 15px; font-size: 0.9rem;">+ Add New Ticket</button></div>
+            <div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;"><thead><tr style="border-bottom: 1px solid rgba(255,255,255,0.2); text-align: left;"><th style="padding: 10px;">ID</th><th style="padding: 10px;">Title</th><th style="padding: 10px;">Type</th><th style="padding: 10px;">Hours</th><th style="padding: 10px;">Threshold</th><th style="padding: 10px;">Status</th><th style="padding: 10px; text-align: right;">Actions</th></tr></thead><tbody id="ticketListBody"></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- EDIT/ADD MODAL -->
+    <div id="editModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header"><h3 class="modal-title" id="editModalTitle">Edit Ticket</h3><button class="close-btn" onclick="closeEditModal()">×</button></div>
+            <input type="hidden" id="editIndex">
+            <div class="form-group"><label class="form-label">ID</label><input type="text" id="editId" class="form-input" placeholder="Auto-generated or Enter ID"></div>
+            <div class="form-group"><label class="form-label">Ticket Title</label><input type="text" id="editTitle" class="form-input" placeholder="Enter task title"></div>
+            <div class="form-group"><label class="form-label">Ticket Type</label><select id="editType" class="form-select" onchange="updateThresholdFromType()"><option value="Small">Small</option><option value="Medium">Medium</option><option value="Large">Large</option></select></div>
+            <div class="form-group"><label class="form-label">Actual Time (Business Hours)</label><input type="number" id="editTime" class="form-input" step="0.01" min="0"></div>
+            <div class="form-group"><label class="form-label">Threshold (Hours)</label><input type="number" id="editThreshold" class="form-input" step="0.5" min="0"></div>
+            <div class="action-row"><button class="btn" style="background: #475569;" onclick="closeEditModal()">Cancel</button><button class="btn" onclick="saveTicket()">Save Changes</button></div>
+        </div>
+    </div>
+
+    <script>
+        let pieChart, barChart;
+        let loadedTicketData = null;
+        if (typeof ChartDataLabels !== 'undefined') { Chart.register(ChartDataLabels); }
+        lucide.createIcons();
+
+        const fileInput = document.getElementById('fileInput');
+        fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFile(e.target.files[0]); });
+
+        function showAlert(message) { const alertContainer = document.getElementById('alertContainer'); alertContainer.innerHTML = `<div class="alert alert-error">${message}</div>`; setTimeout(() => { alertContainer.innerHTML = ''; }, 5000); }
+
+        function openTicketList(filterType, filterValue) {
+            if(!loadedTicketData) return;
+            const modal = document.getElementById('listModal');
+            const tbody = document.getElementById('ticketListBody');
+            tbody.innerHTML = '';
+            let filtered = [];
+            let titleText = 'All Tickets';
+            if(filterType === 'all') { filtered = loadedTicketData; } 
+            else if (filterType === 'status') { titleText = filterValue === 'onTime' ? 'On Time Tickets' : 'Breached Tickets'; filtered = loadedTicketData.filter(t => filterValue === 'onTime' ? t.actualTime <= t.threshold : t.actualTime > t.threshold ); } 
+            else if (filterType === 'type') { titleText = `${filterValue} Tickets`; filtered = loadedTicketData.filter(t => t.type === filterValue); }
+            document.getElementById('listModalTitle').textContent = titleText;
+            filtered.forEach((t) => {
+                const index = loadedTicketData.indexOf(t);
+                const isBreached = t.actualTime > t.threshold;
+                const row = `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05);"><td style="padding: 10px; color: #93c5fd; font-family: monospace;">${t.id || '-'}</td><td style="padding: 10px;">${t.title || 'Untitled'}</td><td style="padding: 10px;"><span class="badge" style="background: rgba(255,255,255,0.1); font-size: 0.8rem;">${t.type}</span></td><td style="padding: 10px;">${t.actualTime}</td><td style="padding: 10px;">${t.threshold}</td><td style="padding: 10px;"><span class="badge ${isBreached ? 'badge-red' : 'badge-green'}" style="font-size: 0.75rem;">${isBreached ? 'Breached' : 'On Time'}</span></td><td style="padding: 10px; text-align: right;"><span class="edit-btn" onclick="editTicket(${index})">Edit</span><span class="delete-btn" onclick="deleteTicket(${index})">Delete</span></td></tr>`;
+                tbody.innerHTML += row;
+            });
+            modal.classList.add('active');
+        }
+
+        function closeListModal() { document.getElementById('listModal').classList.remove('active'); }
+        function addTicket() { document.getElementById('editIndex').value = '-1'; document.getElementById('editId').value = Math.floor(Math.random() * 1000000); document.getElementById('editTitle').value = ''; document.getElementById('editType').value = 'Medium'; document.getElementById('editTime').value = ''; document.getElementById('editThreshold').value = '6'; document.getElementById('editModalTitle').innerText = 'Add New Ticket'; closeListModal(); document.getElementById('editModal').classList.add('active'); }
+        function editTicket(index) { const t = loadedTicketData[index]; document.getElementById('editIndex').value = index; document.getElementById('editId').value = t.id || ''; document.getElementById('editTitle').value = t.title || ''; document.getElementById('editType').value = t.type; document.getElementById('editTime').value = t.actualTime; document.getElementById('editThreshold').value = t.threshold; document.getElementById('editModalTitle').innerText = 'Edit Ticket'; closeListModal(); document.getElementById('editModal').classList.add('active'); }
+        function updateThresholdFromType() { const type = document.getElementById('editType').value; const map = { 'Small': 4, 'Medium': 6, 'Large': 8 }; if(map[type]) document.getElementById('editThreshold').value = map[type]; }
+        function saveTicket() { const index = parseInt(document.getElementById('editIndex').value); const id = document.getElementById('editId').value; const title = document.getElementById('editTitle').value; const type = document.getElementById('editType').value; const time = parseFloat(document.getElementById('editTime').value); const threshold = parseFloat(document.getElementById('editThreshold').value); if(isNaN(time) || isNaN(threshold)) { alert("Please enter valid numbers"); return; } const newItem = { id: id, title: title, type: type, actualTime: time, threshold: threshold }; if(index === -1) { if(!loadedTicketData) loadedTicketData = []; loadedTicketData.push(newItem); } else { loadedTicketData[index] = newItem; } closeEditModal(); generateDashboard(loadedTicketData); openTicketList('all'); }
+        function deleteTicket(index) { if(confirm("Are you sure?")) { loadedTicketData.splice(index, 1); generateDashboard(loadedTicketData); openTicketList('all'); } }
+        function closeEditModal() { document.getElementById('editModal').classList.remove('active'); if(loadedTicketData && loadedTicketData.length > 0) openTicketList('all'); }
+
+        function requestAdoSync() { const btn = document.getElementById('syncAdoBtn'); btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Connecting...`; lucide.createIcons(); window.parent.postMessage({ type: 'REQUEST_ADO_SYNC_RUN' }, '*'); }
+
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'ADO_DATA_FOR_RUN') {
+                const tickets = event.data.payload;
+                if(!tickets || tickets.length === 0) { showAlert('❌ No valid tickets found.'); resetSyncBtn(); return; }
+                loadedTicketData = tickets;
+                document.getElementById('fileName').textContent = "Synced from Azure DevOps";
+                document.getElementById('processBtn').disabled = false;
+                document.getElementById('processBtn').style.opacity = 1;
+                resetSyncBtn();
+                processData();
+            }
+        });
+
+        function resetSyncBtn() { const btn = document.getElementById('syncAdoBtn'); btn.innerHTML = `<i data-lucide="cloud-lightning" class="w-4 h-4"></i> Sync from ADO`; lucide.createIcons(); }
+
+        function parseCustomDate(dateStr) {
+            if (!dateStr) return null;
+            if (typeof dateStr === 'number') return new Date(Math.round((dateStr - 25569) * 86400 * 1000));
+            if (typeof dateStr === 'string') {
+                const parts = dateStr.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})\s(\d{1,2}):(\d{1,2})/);
+                if (parts) return new Date(parts[3], parts[2] - 1, parts[1], parts[4], parts[5]);
+                const d = new Date(dateStr); if (!isNaN(d.getTime())) return d;
+            }
+            return null;
+        }
+
+        function calculateBusinessHours(startDate, endDate) {
+            let minutes = 0; if (!startDate || !endDate || startDate >= endDate) return 0;
+            if ((endDate - startDate) > 31536000000) return 0; 
+            let ptr = new Date(startDate);
+            while (ptr < endDate) {
+                if (ptr.getDay() !== 0 && ptr.getDay() !== 6) {
+                    if (ptr.getHours() >= 9 && ptr.getHours() < 17) minutes += 60;
+                }
+                ptr.setHours(ptr.getHours() + 1); ptr.setMinutes(0); ptr.setSeconds(0);
+            }
+            return parseFloat((minutes / 60).toFixed(2));
+        }
+
+        function handleFile(file) {
+            if (!file.name.match(/\.(xlsx|xls|csv)$/)) { showAlert('❌ Please upload valid Excel or CSV'); return; }
+            loadedTicketData = null;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    if (jsonData.length === 0) { showAlert('❌ File is empty'); return; }
+                    const ticketData = jsonData.map((row) => {
+                        const title = row['Title'] || row['title'];
+                        const id = row['ID'] || row['id'] || Math.floor(Math.random() * 1000000);
+                        let ticketType = row['Ticket type'];
+                        const tags = (row['Tags'] || row['tags'] || '').toLowerCase();
+                        if (tags.includes('small')) ticketType = 'Small';
+                        else if (tags.includes('large')) ticketType = 'Large';
+                        else if (tags.includes('medium')) ticketType = 'Medium';
+                        else if (!ticketType) ticketType = 'Medium';
+                        let actualTime = parseFloat(row['Actual time']);
+                        if (isNaN(actualTime)) {
+                            const start = row['Actual Start date'] || row['Actual Start Date'] || row['Start Date'] || row['start date'];
+                            const end = row['Actual End date'] || row['Actual End Date'] || row['End Date'] || row['end date'];
+                            if (start && end) actualTime = calculateBusinessHours(parseCustomDate(start), parseCustomDate(end));
+                            else actualTime = 0;
+                        }
+                        let threshold = parseFloat(row['Threshold']);
+                        if (isNaN(threshold)) threshold = { 'Small': 4, 'Medium': 6, 'Large': 8 }[ticketType] || 6;
+                        return { id: id, title: title, actualTime: actualTime, type: ticketType, threshold: threshold };
+                    });
+                    const validTickets = ticketData.filter(t => t.type);
+                    if (validTickets.length === 0) { showAlert('❌ No valid data found'); return; }
+                    loadedTicketData = validTickets;
+                    document.getElementById('fileName').textContent = file.name;
+                    document.getElementById('processBtn').disabled = false;
+                    document.getElementById('processBtn').style.opacity = 1;
+                } catch (error) { showAlert('❌ Error: ' + error.message); }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processData() { if (!loadedTicketData) return; generateDashboard(loadedTicketData); }
+
+        function generateDashboard(ticketData) {
+            document.getElementById('dashboard').classList.add('active');
+            const total = ticketData.length;
+            const onTime = ticketData.filter(t => t.actualTime <= t.threshold).length;
+            const breached = total - onTime;
+            const slaPercentage = ((onTime / total) * 100).toFixed(1);
+            window.parent.postMessage({ type: 'BAU_UPDATE', payload: { totalTickets: total, withinSLA: onTime, breachedSLA: breached, slaPercentage: slaPercentage } }, '*');
+            document.getElementById('totalTickets').textContent = total;
+            document.getElementById('onTimeTickets').textContent = onTime;
+            document.getElementById('breachedTickets').textContent = breached;
+            document.getElementById('slaPercentage').textContent = slaPercentage + '%';
+            if (pieChart) pieChart.destroy(); if (barChart) barChart.destroy();
+            const pieCtx = document.getElementById('pieChart').getContext('2d');
+            pieChart = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: { labels: ['On Time', 'SLA Breached'], datasets: [{ data: [onTime, breached], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#fff', font: { size: 14 }, padding: 20 } }, datalabels: { color: '#fff', font: { weight: 'bold', size: 16 }, formatter: (value) => `${value}\n${((value / total) * 100).toFixed(1)}%`, display: true } } }
+            });
+            const byType = {};
+            ticketData.forEach((ticket) => {
+                if (!byType[ticket.type]) { byType[ticket.type] = { total: 0, onTime: 0, breached: 0, totalTime: 0 }; }
+                byType[ticket.type].total += 1; byType[ticket.type].totalTime += ticket.actualTime;
+                if (ticket.actualTime <= ticket.threshold) byType[ticket.type].onTime += 1; else byType[ticket.type].breached += 1;
+            });
+            const barData = Object.keys(byType).map(type => ({ type, ...byType[type] }));
+            const barCtx = document.getElementById('barChart').getContext('2d');
+            barChart = new Chart(barCtx, {
+                type: 'bar',
+                data: { labels: barData.map(d => d.type), datasets: [{ label: 'On Time', data: barData.map(d => d.onTime), backgroundColor: '#10b981' }, { label: 'Breached', data: barData.map(d => d.breached), backgroundColor: '#ef4444' }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: '#fff', font: { size: 14 } }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }, y: { ticks: { color: '#fff', font: { size: 14 } }, grid: { color: 'rgba(255, 255, 255, 0.1)' }, beginAtZero: true } }, plugins: { legend: { labels: { color: '#fff', font: { size: 14 } } } } }
+            });
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = '';
+            barData.forEach(data => {
+                const avgTime = (data.totalTime / data.total).toFixed(2);
+                const slaPercent = ((data.onTime / data.total) * 100).toFixed(1);
+                let badgeClass = 'badge-green'; if (slaPercent < 70) badgeClass = 'badge-red'; else if (slaPercent < 90) badgeClass = 'badge-yellow';
+                const row = `<tr ondblclick="openTicketList('type', '${data.type}')"><td><strong>${data.type}</strong></td><td style="text-align: center;">${{ 'Small': 4, 'Medium': 6, 'Large': 8 }[data.type] || '-'}</td><td style="text-align: center;">${data.total}</td><td style="text-align: center;"><span class="badge badge-green">${data.onTime}</span></td><td style="text-align: center;"><span class="badge badge-red">${data.breached}</span></td><td style="text-align: center;">${avgTime}</td><td style="text-align: center;"><span class="badge ${badgeClass}">${slaPercent}%</span></td></tr>`;
+                tableBody.innerHTML += row;
+            });
+            document.getElementById('currentTime').textContent = new Date().toLocaleString();
+            document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function downloadReportAsJPG() {
+            const btn = document.getElementById('downloadBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Generating...';
+            try {
+                const canvas = await html2canvas(document.getElementById('capture-region'), { backgroundColor: '#0f172a', scale: 2 });
+                const link = document.createElement('a'); link.download = `Report_${new Date().toISOString().split('T')[0]}.jpg`; link.href = canvas.toDataURL('image/jpeg', 1.0); link.click();
+            } catch (err) { console.error(err); alert('Error downloading report'); }
+            btn.innerHTML = originalText;
+        }
+    </script>
+</body>
+</html>
+</template>
+
+    <script>
+        // --- GLOBAL & UTILITY FUNCTIONS ---
+        // L3 Data State
+        let l3Data = []; 
+        let activeL3Discipline = null;
+        
+        // UUID Generator for reliable CRUD
+        function generateUUID() {
+            return 'uuid-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Helper: Calculate Business Hours (M-F, 8 hours/day roughly)
+        function calculateBusinessHours(startDate, endDate) {
+            let minutes = 0;
+            // Defensive check
+            if (!startDate || !endDate) return 0;
+            
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            if (start >= end) return 0;
+
+            // If duration is extremely long (e.g. > 1 year), return 0 to prevent browser hang
+            if ((end - start) > 31536000000) return 0; 
+
+            let ptr = new Date(start);
+
+            // Iterate by hour for performance (vs minute)
+            while (ptr < end) {
+                const day = ptr.getDay();
+                const hour = ptr.getHours();
+                
+                // Assume 09:00 to 17:00 is working window (8 hours)
+                // 0=Sun, 6=Sat
+                if (day !== 0 && day !== 6) {
+                    if (hour >= 9 && hour < 18) {
+                        minutes += 60;
+                    }
+                }
+                
+                // Advance 1 hour
+                ptr.setHours(ptr.getHours() + 1);
+                ptr.setMinutes(0);
+                ptr.setSeconds(0);
+            }
+            
+            return parseFloat((minutes / 60).toFixed(2));
+        }
+
+        function showAlert(message) {
+            alert(message);
+        }
+
+        let headerClickTimer = null;
+        function handleHeaderClick(singleFn, toggleId) {
+            if (headerClickTimer) {
+                clearTimeout(headerClickTimer);
+                headerClickTimer = null;
+                if(typeof toggleId === 'function') {
+                    toggleId();
+                } else if(toggleId) {
+                    toggleElement(toggleId);
+                }
+            } else {
+                headerClickTimer = setTimeout(() => {
+                    headerClickTimer = null;
+                    if(singleFn) singleFn();
+                }, 250);
+            }
+        }
+
+        function toggleElement(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.toggle('hidden');
+        }
+
+        function closeModal(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('open');
+        }
+
+        // --- GLOBAL VARIABLES (Dashboard) ---
+        let milestones = [];
+        let userStories = [];
+        let bugs = []; // Added for Bugs Tracker
+        let blockers = [];
+        let kpiData = [];
+        let taskDisciplines = [
+            { discipline: 'DMT', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 },
+            { discipline: 'Tech', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 },
+            { discipline: 'Content Mgmt.', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 },
+            { discipline: 'QA', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 },
+        ];
+        
+        let pendingDisciplineData = []; 
+        let profileToDisciplineMap = {}; 
+        let l2Columns = [{id:'c1',name:'Col 1'}, {id:'c2',name:'Col 2'}, {id:'c3',name:'Col 3'}];
+        let l2Data = {
+            'DMT': [], 'Tech': [], 'Content Mgmt.': [], 'QA': []
+        };
+        
+        let tempAdoTasks = [];
+        let expandedDiscipline = 'ALL';
+        let activeUsStage = 'New';
+        let activeBugStage = 'New'; // Added for Bugs Tracker
+        let bauData = { totalTickets: 0, withinSLA: 0, breachedSLA: 0, slaPercentage: 0 };
+        let showTrackerDetails = false;
+        let showL2Details = false;
+        let discModalTab = 'L1';
+        const usStages = ['New', 'Development', 'Authoring', 'IT UAT', 'Business UAT', 'Closed'];
+        const bugStages = ['New', 'Active', 'Resolved', 'Hold', 'Closed']; // Added for Bugs Tracker
+        let savedSummaryText = null;
+        let adoSyncSource = null;
+
+        // --- REPORTING LOGIC ---
+        const reportSections = [
+            { id: 'summary-section', label: 'Overall Summary' },
+            { id: 'section-milestones', label: 'Project Milestones' },
+            { id: 'section-discipline', label: 'Task Discipline' },
+            { id: 'section-user-stories', label: 'User Stories' },
+            { id: 'section-bugs', label: 'Bugs Tracker' }, // Added to reporting
+            { id: 'section-blockers', label: 'Active Blockers' },
+            { id: 'section-kpi', label: 'KPIs' },
+            { id: 'section-bau', label: 'BAU Update' }
+        ];
+
+        function openReportModal() {
+            const container = document.getElementById('report-toggles');
+            container.innerHTML = reportSections.map(s => {
+                const el = document.getElementById(s.id);
+                const isHidden = el ? el.classList.contains('hidden-by-report') : false;
+                return `
+                    <label class="flex items-center justify-between p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 cursor-pointer transition">
+                        <span class="text-sm font-medium text-gray-700">${s.label}</span>
+                        <input type="checkbox" id="toggle-${s.id}" class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" ${!isHidden ? 'checked' : ''}>
+                    </label>
+                `;
+            }).join('');
+            document.getElementById('modal-report-config').classList.add('open');
+        }
+
+        function selectAllSections(select) {
+            reportSections.forEach(s => {
+                const cb = document.getElementById(`toggle-${s.id}`);
+                if(cb) cb.checked = select;
+            });
+        }
+
+        function applyReportView() {
+            reportSections.forEach(s => {
+                const cb = document.getElementById(`toggle-${s.id}`);
+                const el = document.getElementById(s.id);
+                if (el && cb) {
+                    if (cb.checked) {
+                        el.classList.remove('hidden-by-report');
+                        if (el.classList.contains('hidden') && s.id !== 'summary-section') el.classList.remove('hidden');
+                        if (s.id === 'summary-section') renderSummary(); 
+                    } else {
+                        el.classList.add('hidden-by-report');
+                        el.classList.add('hidden');
+                    }
+                }
+            });
+            closeModal('modal-report-config');
+        }
+
+        async function exportReport() {
+            const btn = document.querySelector('button[onclick="exportReport()"]');
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating...`;
+            lucide.createIcons();
+            try {
+                await new Promise(r => setTimeout(r, 100)); // UI settle
+                const element = document.getElementById('content-build');
+                const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#f9fafb', ignoreElements: (el) => el.tagName === 'BUTTON' || el.classList.contains('no-print') });
+                const link = document.createElement('a');
+                link.download = `Executive_Report_${new Date().toISOString().split('T')[0]}.jpg`;
+                link.href = canvas.toDataURL('image/jpeg', 0.9);
+                link.click();
+            } catch (err) { console.error(err); alert("Failed: " + err.message); } 
+            finally { btn.innerHTML = originalContent; lucide.createIcons(); }
+        }
+
+        // --- DASHBOARD TABS ---
+        function switchTab(t) {
+            document.getElementById('content-build').classList.toggle('hidden', t!=='build');
+            document.getElementById('content-run').classList.toggle('hidden', t!=='run');
+            document.getElementById('tab-build').className = t==='build' ? "flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium bg-white text-blue-600 shadow-sm" : "flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium text-gray-600";
+            document.getElementById('tab-run').className = t==='run' ? "flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium bg-white text-blue-600 shadow-sm" : "flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium text-gray-600";
+        }
+        
+        function toggleTrackerDetails() {
+            showTrackerDetails = !showTrackerDetails;
+            const el = document.getElementById('milestone-details');
+            const icon = document.getElementById('tracker-arrow');
+            if(showTrackerDetails) { el.classList.remove('hidden'); icon.classList.add('rotate-180'); renderMilestoneDetails(); } 
+            else { el.classList.add('hidden'); icon.classList.remove('rotate-180'); }
+        }
+
+        // --- FILE UPLOAD HANDLERS ---
+        function handleFileUpload(inp, type) {
+            const f = inp.files[0]; if(!f) return;
+            const r = new FileReader();
+            r.onload = e => {
+                try {
+                    const w = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+                    let sheetName = w.SheetNames[0];
+                    if ((type === 'stories' || type === 'bugs') && w.SheetNames.length > 1) sheetName = w.SheetNames[1];
+                    const j = XLSX.utils.sheet_to_json(w.Sheets[sheetName]);
+                    if(type === 'milestones') {
+                        milestones = j.map((r,i) => ({
+                            phase: r.Activity || r.activity || `Phase ${i+1}`, 
+                            startDate: parseXlsDate(r['Start Date']||r.startDate), 
+                            endDate: parseXlsDate(r['End Date']||r.endDate),
+                            actualStartDate: parseXlsDate(r['Actual Start Date']||r.actualStartDate), 
+                            actualEndDate: parseXlsDate(r['Actual End Date']||r.actualEndDate), 
+                            remark: r.Remark||r.remark||''
+                        }));
+                        renderMilestones();
+                    } else if(type === 'stories') { mapStories(j); }
+                    else if(type === 'bugs') { mapBugs(j); }
+                    else if(type === 'kpi') {
+                        let lastCategory = 'General';
+                        kpiData = j.map(r => {
+                            const keys = Object.keys(r);
+                            const ignore = ['Category','KPI','Threshold','Tool','Frequency','__rowNum__'];
+                            const valKey = keys.find(k => !ignore.includes(k) && !k.includes('__EMPTY')) || 'Value';
+                            const cat = r.Category || r.category;
+                            if (cat) lastCategory = cat;
+                            return {
+                                category: lastCategory,
+                                name: r.KPI || r.kpi || 'Metric', 
+                                value: r[valKey] || r.Value || r.Current || 0, 
+                                threshold: r.Threshold || r.threshold || 0, 
+                                frequency: r.Frequency || r.frequency || 'M',
+                                tool: r.Tool || r.tool || ''
+                            };
+                        }).filter(k => k.name && k.name !== 'Metric'); 
+                        renderKPIs();
+                    }
+                    alert('Upload Successful!');
+                } catch(err) { alert('Upload Error: ' + err.message); }
+            };
+            r.readAsArrayBuffer(f);
+            inp.value = ''; 
+        }
+
+        function handleDisciplineUpload(inp) {
+            const f = inp.files[0]; if(!f) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type:'array'});
+                    if (workbook.SheetNames.length < 1) throw new Error("Excel file must have at least one sheet.");
+
+                    // Sheet 1 (L1)
+                    const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
+                    const json1 = XLSX.utils.sheet_to_json(sheet1);
+                    const l1Map = { 'Total Tasks': 'totalTasks', 'Total': 'totalTasks', 'Open Tasks': 'openTasks', 'Open': 'openTasks', 'Closed Task': 'closedTasks', 'Closed Tasks': 'closedTasks', 'Closed': 'closedTasks', 'Hold Task': 'holdTasks', 'Hold Tasks': 'holdTasks', 'Hold': 'holdTasks', 'Grand Total': 'grandTotal' };
+
+                    json1.forEach(row => {
+                        const discName = row['Discipline']; if (!discName) return;
+                        let targetDisc = null;
+                        if (discName === 'DMT') targetDisc = taskDisciplines.find(d => d.discipline === 'DMT');
+                        else if (discName === 'Development' || discName === 'Tech') targetDisc = taskDisciplines.find(d => d.discipline === 'Tech');
+                        else if (discName === 'Content Mgmt.' || discName === 'Content Management') targetDisc = taskDisciplines.find(d => d.discipline === 'Content Mgmt.');
+                        else if (discName === 'QA') targetDisc = taskDisciplines.find(d => d.discipline === 'QA');
+
+                        if (targetDisc) {
+                            Object.keys(row).forEach(k => {
+                                const mappedKey = l1Map[k.trim()];
+                                if (mappedKey) targetDisc[mappedKey] = parseInt(row[k]) || 0;
+                            });
+                        }
+                    });
+
+                    // Sheet 2 (L2)
+                    if (workbook.SheetNames.length >= 2) {
+                        const sheet2 = workbook.Sheets[workbook.SheetNames[1]];
+                        const json2Raw = XLSX.utils.sheet_to_json(sheet2, {header: 1});
+                        if (json2Raw.length > 0) processL2Sheet(json2Raw);
+                    }
+
+                    renderDisciplineTable();
+                    renderL2Details();
+                    alert('Discipline Data Uploaded Successfully!');
+                } catch(err) { console.error(err); alert('Upload Error: ' + err.message); }
+            };
+            reader.readAsArrayBuffer(f);
+            inp.value = '';
+        }
+
+        function processL2Sheet(rows) {
+            let headerRowIndex = -1; let headerRow = [];
+            for (let i = 0; i < Math.min(rows.length, 15); i++) {
+                const r = rows[i];
+                if (r.some(c => c && typeof c === 'string' && (c.trim().toLowerCase() === 'list' || c.trim().toLowerCase().includes('feature')))) { headerRowIndex = i; headerRow = r; break; }
+            }
+            if (headerRowIndex === -1) return;
+            const featureColIdx = headerRow.findIndex(c => c && typeof c === 'string' && (c.trim().toLowerCase() === 'list' || c.trim().toLowerCase().includes('feature')));
+            const newCols = [];
+            for (let i = featureColIdx + 1; i < headerRow.length; i++) { if (headerRow[i]) newCols.push({ id: `c_${i}`, name: headerRow[i], index: i }); }
+            if (newCols.length > 0) l2Columns = newCols.map(c => ({ id: c.id, name: c.name }));
+            Object.keys(l2Data).forEach(k => l2Data[k] = []);
+            let currentDiscipline = null;
+            for (let i = headerRowIndex + 1; i < rows.length; i++) {
+                const row = rows[i]; if (!row || row.length === 0) continue;
+                const col0 = row[0] ? String(row[0]).trim() : '';
+                if (col0 === 'DMT') currentDiscipline = 'DMT';
+                else if (col0 === 'Tech' || col0 === 'Development') currentDiscipline = 'Tech';
+                else if (col0 === 'Content Management' || col0 === 'Content Mgmt.') currentDiscipline = 'Content Mgmt.';
+                else if (col0 === 'QA') currentDiscipline = 'QA';
+                
+                if (currentDiscipline && l2Data[currentDiscipline]) {
+                    let featureName = row[featureColIdx];
+                    const hasContent = newCols.some(col => row[col.index]);
+                    if ((featureName || hasContent) && featureName !== currentDiscipline && featureName !== 'List') {
+                        const rowData = { feature: featureName || '' };
+                        newCols.forEach(col => { rowData[col.id] = row[col.index] || ''; });
+                        l2Data[currentDiscipline].push(rowData);
+                    }
+                }
+            }
+        }
+
+        function mapStories(json) {
+            userStories = json.map(r => ({
+                id: r['US ID'] || r['ID'] || r['id'] || '?', 
+                type: r['Work Item Type'] || r['Type'] || r['type'] || 'User Story', 
+                description: r['Description'] || r['Title'] || r['description'] || r['title'] || '', 
+                stage: normalizeStage(r['State'] || r['Status'] || r['Stage'] || r['state'] || r['status'] || 'New'), 
+                owner: r['Owner'] || r['owner'] || '', 
+                eta: r['ETA'] || r['eta'] || '-'
+            }));
+            renderUserStoryTiles();
+        }
+
+        function mapBugs(json) {
+            bugs = json.map(r => ({
+                id: r['Bug ID'] || r['ID'] || r['id'] || '?', 
+                type: 'Bug', 
+                description: r['Description'] || r['Title'] || r['description'] || r['title'] || '', 
+                stage: normalizeBugStage(r['State'] || r['Status'] || r['Stage'] || r['state'] || r['status'] || 'New'), 
+                owner: r['Owner'] || r['owner'] || '', 
+                eta: r['ETA'] || r['eta'] || '-'
+            }));
+            renderBugTiles();
+        }
+
+        function parseXlsDate(d) {
+            if(!d) return '';
+            if(typeof d === 'number') return new Date(Math.round((d - 25569)*86400*1000)).toISOString().split('T')[0];
+            const parsed = new Date(d);
+            return isNaN(parsed.getTime()) ? d : parsed.toISOString().split('T')[0];
+        }
+        
+        function normalizeStage(s) {
+            const l = String(s).toLowerCase();
+            if(l.includes('dev')) return 'Development';
+            if(l.includes('auth')) return 'Authoring';
+            if(l.includes('it uat') || l.includes('test') || l.includes('qa')) return 'IT UAT';
+            if(l.includes('bus') || l.includes('biz')) return 'Business UAT';
+            if(l.includes('clos') || l.includes('done') || l.includes('resolved')) return 'Closed';
+            return 'New';
+        }
+
+        function normalizeBugStage(s) {
+            const l = String(s).toLowerCase();
+            if(l.includes('act') || l.includes('progress') || l.includes('work')) return 'Active';
+            if(l.includes('res') || l.includes('fix')) return 'Resolved';
+            if(l.includes('hold') || l.includes('block') || l.includes('wait')) return 'Hold';
+            if(l.includes('clos') || l.includes('done')) return 'Closed';
+            return 'New';
+        }
+
+        // --- RENDER FUNCTIONS ---
+        function renderAll() {
+            renderMilestones();
+            renderMilestoneDetails();
+            renderDisciplineTable();
+            renderL2Details();
+            renderUserStoryTiles();
+            renderBugTiles();
+            renderBlockers();
+            renderKPIs();
+            renderBauStats();
+            renderSummary(); 
+        }
+
+        function renderMilestones() {
+            const container = document.getElementById('milestone-container');
+            if(milestones.length === 0) {
+                container.innerHTML = `<div onclick="openMilestoneModal()" class="text-center py-10 cursor-pointer"><i data-lucide="plus" class="w-12 h-12 mx-auto text-gray-300"></i><p class="text-gray-500 mt-2">Add Milestone</p></div>`;
+                lucide.createIcons(); renderSummary(); return;
+            }
+            const completedCount = milestones.filter(m => calculateStatus(m).status === 'completed').length;
+            const pct = (completedCount / milestones.length) * 100;
+            let html = `<div class="relative min-w-max px-4 pt-8 pb-4"><div class="absolute top-12 left-4 right-4 h-1 bg-gray-300 z-0"></div><div class="absolute top-12 left-4 h-1 bg-blue-500 z-0 transition-all duration-500" style="width: ${pct}%"></div><div class="flex justify-between items-start">`;
+            milestones.forEach((m, i) => {
+                const { color } = calculateStatus(m);
+                html += `<div class="flex flex-col items-center z-10 relative mx-2 group cursor-pointer" onclick="openMilestoneModal(${i})" style="width: 120px"><div class="w-8 h-8 rounded-full flex items-center justify-center mb-2 text-white shadow-sm transition-transform hover:scale-110 ${color}"><i data-lucide="check" class="w-4 h-4"></i></div><p class="text-xs font-bold text-gray-700 text-center leading-tight mb-1 break-words w-full">${m.phase}</p></div>`;
+            });
+            html += `</div></div>`; container.innerHTML = html; lucide.createIcons(); renderMilestoneDetails(); renderSummary();
+        }
+
+        function renderMilestoneDetails() {
+            if(!showTrackerDetails) return;
+            const container = document.getElementById('milestone-cards');
+            container.innerHTML = milestones.map((m, i) => {
+                const { tracker, execLabel, execColor } = calculateStatus(m);
+                let badgeColor = 'bg-gray-100 text-gray-800';
+                if(tracker === 'On Track') badgeColor = 'bg-green-100 text-green-800 border-green-200';
+                if(tracker === 'Delayed') badgeColor = 'bg-red-100 text-red-800 border-red-200';
+                return `<div class="bg-white rounded-lg p-3 border border-gray-200 flex flex-col min-w-[160px] max-w-[180px] shadow-sm hover:border-blue-400 cursor-pointer" onclick="openMilestoneModal(${i})"><p class="text-xs font-bold text-gray-800 mb-2 text-center h-8 flex items-center justify-center break-words">${m.phase}</p><div class="flex-1 space-y-2 mb-2"><div class="bg-blue-50 p-1.5 rounded text-[10px]"><p class="font-bold text-blue-700">Planned</p><p>S: ${m.startDate || '-'}</p><p>E: ${m.endDate || '-'}</p></div><div class="bg-green-50 p-1.5 rounded text-[10px]"><p class="font-bold text-green-700">Actual</p><p>S: ${m.actualStartDate || '-'}</p><p>E: ${m.actualEndDate || '-'}</p></div></div><div class="mb-2 px-1 border-t border-gray-50 pt-1">${m.remark ? `<div class="bg-gray-50 p-1 rounded border border-gray-100 mb-1"><p class="text-[10px] text-gray-600 line-clamp-2" title="${m.remark}">R: ${m.remark}</p></div>` : ''}<div class="flex justify-between items-center"><span class="text-[10px] text-gray-500 font-medium">Status:</span><span class="text-[10px] font-bold px-1.5 py-0.5 rounded border ${execColor}">${execLabel}</span></div></div><div class="mt-auto pt-2 border-t border-gray-100"><span class="block text-center text-[10px] px-2 py-1 rounded-full font-bold border ${badgeColor}">${tracker}</span></div></div>`;
+            }).join('');
+        }
+
+        function renderDisciplineTable() {
+            const tbody = document.getElementById('discipline-tbody');
+            let grand = {t:0,o:0,c:0,h:0,g:0};
+            tbody.innerHTML = taskDisciplines.map(d => {
+                grand.t += +d.totalTasks; grand.o += +d.openTasks; grand.c += +d.closedTasks; grand.h += +d.holdTasks; grand.g += +d.grandTotal;
+                const isExpanded = expandedDiscipline === d.discipline;
+                // Specific L3 Modal triggers on numeric cells
+                return `
+                <tr class="hover:bg-gray-50 text-sm transition-colors ${isExpanded ? 'bg-teal-50 border-l-4 border-teal-500' : ''}">
+                    <td class="px-6 py-4 font-medium flex items-center cursor-pointer" onclick="toggleL2Details('${d.discipline}')">
+                        <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-up'}" class="w-4 h-4 mr-2 text-gray-400"></i>${d.discipline}
+                    </td>
+                    <td class="px-6 py-4 text-center clickable-cell text-blue-600 font-bold" onclick="openL3Modal('${d.discipline}', 'total')">${d.totalTasks}</td>
+                    <td class="px-6 py-4 text-center clickable-cell text-gray-500" onclick="openL3Modal('${d.discipline}', 'Open')">${d.openTasks}</td>
+                    <td class="px-6 py-4 text-center clickable-cell text-gray-500" onclick="openL3Modal('${d.discipline}', 'Closed')">${d.closedTasks}</td>
+                    <td class="px-6 py-4 text-center clickable-cell text-gray-500" onclick="openL3Modal('${d.discipline}', 'Hold')">${d.holdTasks}</td>
+                    <td class="px-6 py-4 text-center font-bold clickable-cell" onclick="openL3Modal('${d.discipline}', 'grand')">${d.grandTotal}</td>
+                </tr>`;
+            }).join('') + `<tr class="bg-gray-100 font-bold text-sm"><td class="px-6 py-4">Grand Total</td><td class="px-6 py-4 text-center">${grand.t}</td><td class="px-6 py-4 text-center">${grand.o}</td><td class="px-6 py-4 text-center">${grand.c}</td><td class="px-6 py-4 text-center">${grand.h}</td><td class="px-6 py-4 text-center">${grand.g}</td></tr>`;
+            lucide.createIcons();
+        }
+
+        function renderL2Details() {
+            const container = document.getElementById('l2-container');
+            const content = document.getElementById('l2-content');
+            if (!expandedDiscipline) { container.classList.add('hidden'); return; }
+            container.classList.remove('hidden');
+            const btnText = document.getElementById('l2-btn-text');
+            btnText.textContent = expandedDiscipline === 'ALL' ? 'Collapse Details' : 'View All L2 Details';
+            document.getElementById('l2-header-text').textContent = expandedDiscipline === 'ALL' ? 'All Detailed Activities' : `${expandedDiscipline} Activities`;
+            const entries = Object.entries(l2Data);
+            content.innerHTML = entries.map(([disc, rows]) => {
+                if (expandedDiscipline !== 'ALL' && expandedDiscipline !== disc) return '';
+                return `<div class="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm animate-fade-in"><div class="bg-teal-50 px-4 py-2 border-b border-teal-100 font-medium text-teal-800 text-sm">${disc}</div><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-100"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 w-1/4">Feature/Scope</th>${l2Columns.map(c => `<th class="px-4 py-2 text-center text-xs font-medium text-gray-500 border-l border-gray-100">${c.name}</th>`).join('')}</tr></thead><tbody class="divide-y divide-gray-100 text-xs">${rows.map(r => `<tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium border-r border-gray-50">${r.feature}</td>${l2Columns.map(c => `<td class="px-4 py-3 text-center border-r border-gray-50">${r[c.id]||''}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+            }).join('');
+        }
+
+        // --- L3 MODAL (TASK MANAGEMENT) LOGIC ---
+        function openL3Modal(discipline, type) {
+            activeL3Discipline = discipline;
+            document.getElementById('l3-title').textContent = `${discipline} - ${type === 'total' ? 'All Tasks' : type + ' Tasks'}`;
+            
+            // Set filter to 'ALL' if clicking Total/GrandTotal, otherwise specific status
+            let filterVal = 'ALL';
+            if(type !== 'total' && type !== 'grand') {
+                filterVal = type.replace('Tasks', '').trim();
+            }
+            document.getElementById('l3-filter-status').value = filterVal; 
+            
+            toggleL3Form(false);
+            renderL3Table();
+            document.getElementById('modal-l3').classList.add('open');
+        }
+
+        function toggleL3Form(show) {
+            const form = document.getElementById('l3-form');
+            if (show === undefined) show = form.classList.contains('hidden');
+            form.classList.toggle('hidden', !show);
+            if(show) {
+                document.getElementById('l3-input-title').value = '';
+                document.getElementById('l3-input-status').value = 'Open';
+                document.getElementById('l3-input-owner').value = '';
+                document.getElementById('l3-input-eta').value = '';
+            }
+        }
+
+        function renderL3Table() {
+            const tbody = document.getElementById('l3-tbody');
+            const theadRow = document.getElementById('l3-thead-row');
+            const statusFilter = document.getElementById('l3-filter-status').value;
+            
+            const filtered = l3Data.filter(t => {
+                const matchDisc = t.discipline === activeL3Discipline;
+                const matchStatus = statusFilter === 'ALL' || t.status === statusFilter;
+                return matchDisc && matchStatus;
+            });
+
+            // 1. Dynamic Header Generation
+            const allKeys = new Set();
+            const coreColumns = ['id', 'title', 'status', 'owner', 'eta'];
+            
+            if (filtered.length === 0) {
+                coreColumns.forEach(k => allKeys.add(k));
+            } else {
+                filtered.forEach(t => Object.keys(t).forEach(k => {
+                    if (k !== '_uuid' && k !== 'discipline') allKeys.add(k);
+                }));
+            }
+            
+            const sortedKeys = Array.from(allKeys).sort((a, b) => {
+                const idxA = coreColumns.indexOf(a);
+                const idxB = coreColumns.indexOf(b);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+                return a.localeCompare(b);
+            });
+
+            let headerHtml = '';
+            sortedKeys.forEach(k => {
+                const label = k.charAt(0).toUpperCase() + k.slice(1);
+                const widthClass = k === 'title' ? 'min-w-[200px]' : 'min-w-[100px]';
+                headerHtml += `<th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider ${widthClass} bg-gray-100 border-b border-gray-200">${label}</th>`;
+            });
+            headerHtml += `<th class="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider w-20 bg-gray-100 border-b border-gray-200">Actions</th>`;
+            theadRow.innerHTML = headerHtml;
+
+            // 2. Build Body
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                document.getElementById('l3-empty').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('l3-empty').classList.add('hidden');
+
+            tbody.innerHTML = filtered.map(t => {
+                let cellsHtml = sortedKeys.map(key => {
+                    const val = t[key] || '';
+                    if (key === 'status') {
+                        let statusColor = 'bg-gray-100 text-gray-800 border-gray-200';
+                        if(val === 'Open') statusColor = 'bg-blue-50 text-blue-700 border-blue-200';
+                        if(val === 'Closed') statusColor = 'bg-green-50 text-green-700 border-green-200';
+                        if(val === 'Hold') statusColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                        
+                        return `
+                        <td class="px-4 py-3 border-b border-gray-50">
+                            <div class="relative">
+                                <select onchange="updateL3Cell('${t._uuid}', 'status', this.value)" class="appearance-none w-full text-xs font-bold px-3 py-1.5 rounded-full border cursor-pointer ${statusColor} focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 outline-none transition-shadow">
+                                    <option value="Open" ${val==='Open'?'selected':''}>Open</option>
+                                    <option value="Closed" ${val==='Closed'?'selected':''}>Closed</option>
+                                    <option value="Hold" ${val==='Hold'?'selected':''}>Hold</option>
+                                </select>
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                                    <svg class="h-3 w-3 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+                                </div>
+                            </div>
+                        </td>`;
+                    } else {
+                        return `<td class="px-4 py-3 text-sm text-gray-700 border-b border-gray-50 relative group/cell">
+                            <div class="w-full h-full p-1 rounded border border-transparent hover:border-gray-300 hover:bg-white focus-within:border-blue-400 focus-within:bg-blue-50 transition-all cursor-text flex items-center" 
+                                 contenteditable="true" 
+                                 onblur="updateL3Cell('${t._uuid}', '${key}', this.innerText)">${val}</div>
+                            <i data-lucide="pencil" class="absolute top-4 right-2 w-3 h-3 text-gray-300 opacity-0 group-hover/cell:opacity-100 pointer-events-none"></i>
+                        </td>`;
+                    }
+                }).join('');
+
+                return `
+                <tr class="hover:bg-gray-50 group transition-colors l3-row">
+                    ${cellsHtml}
+                    <td class="px-4 py-3 text-right border-b border-gray-50">
+                        <button onclick="deleteL3Task('${t._uuid}')" class="delete-btn inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-gray-200 text-gray-400 hover:bg-red-50 hover:border-red-200 hover:text-red-600 shadow-sm transition-all transform hover:scale-105" title="Delete Task">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+            
+            lucide.createIcons();
+        }
+
+        function updateL3Cell(uuid, key, value) {
+            const t = l3Data.find(x => x._uuid === uuid);
+            if(t) {
+                if (key === 'status') {
+                     const oldStatus = t.status;
+                     const newStatus = value;
+                     if (oldStatus !== newStatus) {
+                         t.status = newStatus;
+                         updateL1CountStatusChange(t.discipline, oldStatus, newStatus);
+                         renderDisciplineTable();
+                         renderL3Table(); 
+                     }
+                } else {
+                     t[key] = value.trim();
+                }
+            }
+        }
+
+        function saveL3Task() {
+            const title = document.getElementById('l3-input-title').value;
+            const status = document.getElementById('l3-input-status').value;
+            const owner = document.getElementById('l3-input-owner').value;
+            const eta = document.getElementById('l3-input-eta').value;
+
+            if(!title) return alert("Task Title is required");
+            const finalId = String(Math.floor(Math.random() * 100000) + 900000); 
+            const task = { _uuid: generateUUID(), id: finalId, title: title, status: status, owner: owner, eta: eta, discipline: activeL3Discipline };
+            l3Data.push(task);
+            updateL1CountFromL3(activeL3Discipline, 1, status);
+            toggleL3Form(false);
+            renderL3Table();
+            renderDisciplineTable(); 
+        }
+        
+        function deleteL3Task(uuid) {
+            if(!confirm("Are you sure you want to delete this task?")) return;
+            const idx = l3Data.findIndex(t => t._uuid === uuid);
+            if(idx > -1) {
+                const task = l3Data[idx];
+                l3Data.splice(idx, 1);
+                updateL1CountFromL3(activeL3Discipline, -1, task.status);
+                renderL3Table();
+                renderDisciplineTable();
+            }
+        }
+
+        function updateL1CountFromL3(discipline, delta, status) {
+            const disc = taskDisciplines.find(d => d.discipline === discipline);
+            if(!disc) return;
+            disc.totalTasks += delta;
+            if(status === 'Open') disc.openTasks += delta;
+            else if(status === 'Closed') disc.closedTasks += delta;
+            else if(status === 'Hold') disc.holdTasks += delta;
+            disc.grandTotal = disc.openTasks + disc.closedTasks + disc.holdTasks;
+        }
+
+        function updateL1CountStatusChange(discipline, oldS, newS) {
+            const disc = taskDisciplines.find(d => d.discipline === discipline);
+            if(!disc) return;
+            if(oldS === 'Open') disc.openTasks--; else if(oldS === 'Closed') disc.closedTasks--; else if(oldS === 'Hold') disc.holdTasks--;
+            if(newS === 'Open') disc.openTasks++; else if(newS === 'Closed') disc.closedTasks++; else if(newS === 'Hold') disc.holdTasks++;
+            disc.grandTotal = disc.openTasks + disc.closedTasks + disc.holdTasks;
+        }
+
+        // --- USER STORY TRACKER ---
+        function renderUserStoryTiles() {
+            const container = document.getElementById('us-tiles');
+            const counts = {}; usStages.forEach(s=>counts[s]=0);
+            userStories.forEach(s=>counts[s.stage] = (counts[s.stage]||0)+1);
+            container.innerHTML = usStages.map(s => {
+                const act = activeUsStage === s;
+                return `<div onclick="setActiveUsStage('${s}')" ondblclick="openDetailsModal('US', '${s}')" class="cursor-pointer rounded-lg p-4 border-2 transition-all ${act?'border-indigo-500 bg-indigo-50 shadow-sm':'border-gray-200 bg-white hover:border-indigo-300'}"><div class="flex justify-between mb-2"><span class="text-sm font-bold ${act?'text-indigo-700':'text-gray-600'}">${s}</span></div><div class="text-3xl font-extrabold text-gray-800">${counts[s]}</div><div class="text-xs text-gray-500 mt-1">Stories</div></div>`;
+            }).join('');
+            lucide.createIcons();
+            renderSummary();
+        }
+
+        function setActiveUsStage(s) {
+            activeUsStage = s;
+            renderUserStoryTiles();
+        }
+
+        // --- BUGS TRACKER (NEW) ---
+        function renderBugTiles() {
+            const container = document.getElementById('bug-tiles');
+            const counts = {}; bugStages.forEach(s=>counts[s]=0);
+            bugs.forEach(b=>counts[b.stage] = (counts[b.stage]||0)+1);
+            
+            // Insert Total Bugs at start
+            let totalHtml = `<div ondblclick="openDetailsModal('Bug', 'Total')" class="cursor-pointer rounded-lg p-4 border-2 transition-all border-gray-200 bg-white hover:border-red-300"><div class="flex justify-between mb-2"><span class="text-sm font-bold text-gray-600">Total Bugs</span></div><div class="text-3xl font-extrabold text-gray-800">${bugs.length}</div><div class="text-xs text-gray-500 mt-1">Items</div></div>`;
+
+            container.innerHTML = totalHtml + bugStages.map(s => {
+                const act = activeBugStage === s;
+                return `<div onclick="setActiveBugStage('${s}')" ondblclick="openDetailsModal('Bug', '${s}')" class="cursor-pointer rounded-lg p-4 border-2 transition-all ${act?'border-red-500 bg-red-50 shadow-sm':'border-gray-200 bg-white hover:border-red-300'}"><div class="flex justify-between mb-2"><span class="text-sm font-bold ${act?'text-red-700':'text-gray-600'}">${s}</span></div><div class="text-3xl font-extrabold text-gray-800">${counts[s]}</div><div class="text-xs text-gray-500 mt-1">Bugs</div></div>`;
+            }).join('');
+            lucide.createIcons();
+            renderSummary();
+        }
+
+        function setActiveBugStage(s) {
+            activeBugStage = s;
+            renderBugTiles();
+        }
+
+        // --- GENERIC DETAILS MODAL ---
+        function openDetailsModal(dataType, stage) {
+            let items = [];
+            let prefix = "";
+            if (dataType === 'US') {
+                prefix = "User Stories";
+                items = userStories.filter(s => s.stage === stage);
+                activeUsStage = stage;
+            } else {
+                prefix = "Bugs Tracker";
+                items = stage === 'Total' ? bugs : bugs.filter(b => b.stage === stage);
+                activeBugStage = stage;
+            }
+
+            document.getElementById('us-modal-type-prefix').innerText = prefix;
+            document.getElementById('us-modal-stage').innerText = stage;
+            document.getElementById('us-modal-count').innerText = items.length;
+            const tbody = document.getElementById('us-details-tbody');
+            
+            if(items.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-500">No items found</td></tr>`;
+            } else {
+                tbody.innerHTML = items.map(s => `
+                    <tr class="hover:bg-gray-50 text-xs transition-colors">
+                        <td class="px-6 py-4 font-medium">${s.id}</td><td class="px-6 py-4"><span class="bg-gray-100 border rounded px-1">${s.type}</span></td><td class="px-6 py-4 truncate max-w-xs" title="${s.description}">${s.description}</td>
+                        <td class="px-6 py-4"><span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">${s.stage}</span></td>
+                        <td class="px-6 py-4">${s.owner}</td><td class="px-6 py-4">${s.eta}</td>
+                    </tr>
+                `).join('');
+            }
+            document.getElementById('modal-us-details').classList.add('open');
+        }
+
+        function renderBlockers() {
+            document.getElementById('blocker-count').innerText = blockers.filter(b=>!b.resolved).length;
+            const list = document.getElementById('blocker-list');
+            if(blockers.length === 0) {
+                 list.innerHTML = `<div class="p-3 bg-green-50 text-green-700 text-sm text-center rounded">No active blockers!</div>`;
+                 renderSummary();
+                 return;
+            }
+            const sorted = [...blockers].sort((a,b) => (a.resolved === b.resolved) ? 0 : a.resolved ? 1 : -1);
+            list.innerHTML = sorted.map((b,i) => {
+                const originalIndex = blockers.indexOf(b);
+                return `<div class="p-3 rounded border flex justify-between items-start group transition-all ${b.resolved ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-red-50 border-red-200'}" ondblclick="openBlockerEdit(${originalIndex})"><div><div class="flex items-center gap-2 mb-1">${b.resolved ? '<span class="text-xs font-bold text-green-600 bg-green-100 px-2 rounded">RESOLVED</span>' : `<span class="text-[10px] uppercase font-bold px-1 border border-red-300 bg-white rounded">${b.severity}</span>`}<span class="font-bold text-sm text-gray-800 ${b.resolved?'line-through':''}">${b.title}</span></div><div class="text-xs text-gray-600">Owner: ${b.owner} | ETA: ${b.eta}</div></div><div class="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onclick="toggleBlockerResolve(${originalIndex})" class="text-blue-500 hover:text-blue-700"><i data-lucide="${b.resolved ? 'rotate-ccw' : 'check-circle'}" class="w-4 h-4"></i></button><button onclick="deleteBlocker(${originalIndex})" class="text-red-400 hover:text-red-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></div>`;
+            }).join('');
+            lucide.createIcons();
+            renderSummary();
+        }
+
+        function openBlockerEdit(idx) {
+            const b = blockers[idx];
+            document.getElementById('bl-id').value = idx;
+            document.getElementById('bl-title').value = b.title;
+            document.getElementById('bl-severity').value = b.severity;
+            document.getElementById('bl-owner').value = b.owner;
+            document.getElementById('bl-eta').value = b.eta;
+            document.getElementById('blocker-modal-title').innerText = 'Edit Blocker';
+            document.getElementById('modal-blocker').classList.add('open');
+        }
+
+        function saveBlocker() {
+            const idx = document.getElementById('bl-id').value;
+            const b = { title: document.getElementById('bl-title').value, severity: document.getElementById('bl-severity').value, owner: document.getElementById('bl-owner').value, eta: document.getElementById('bl-eta').value, resolved: idx !== '' ? blockers[idx].resolved : false };
+            if(!b.title) return alert('Title required');
+            if(idx !== '') blockers[idx] = b; else blockers.push(b);
+            closeModal('modal-blocker');
+            renderBlockers();
+        }
+        
+        function toggleBlockerResolve(idx) { blockers[idx].resolved = !blockers[idx].resolved; renderBlockers(); }
+        
+        function deleteBlocker(idx) {
+            document.getElementById('delete-target-id').value = idx;
+            document.getElementById('delete-type').value = 'blocker';
+            document.querySelector('#modal-delete-confirm h3').innerText = 'Delete Blocker?';
+            document.getElementById('modal-delete-confirm').classList.add('open');
+        }
+
+        function confirmDelete() {
+            const idx = document.getElementById('delete-target-id').value;
+            const type = document.getElementById('delete-type').value;
+            if(idx !== '') {
+                if(type === 'blocker') { blockers.splice(idx, 1); renderBlockers(); } 
+                else if (type === 'kpi') { kpiData.splice(idx, 1); renderKPIs(); }
+            }
+            closeModal('modal-delete-confirm');
+        }
+
+        function renderKPIs() {
+            const container = document.getElementById('kpi-container');
+            if(kpiData.length === 0) { container.innerHTML = `<div class="p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded">No KPIs.</div>`; renderSummary(); return; }
+            const groups = {}; kpiData.forEach((k, index) => { if(!groups[k.category]) groups[k.category]=[]; groups[k.category].push({...k, originalIndex: index}); });
+            container.innerHTML = Object.keys(groups).map(g => `<div class="bg-white rounded border border-gray-200 overflow-hidden"><div class="bg-gray-50 px-4 py-2 border-b font-bold text-gray-700 text-sm">${g}</div><div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">${groups[g].map(k => {
+                const valStr = String(k.value).replace(/[^0-9.]/g, ''); const val = parseFloat(valStr);
+                const threshStr = String(k.threshold).replace(/[^0-9.]/g, ''); const thresh = parseFloat(threshStr);
+                let isGood = true; if (!isNaN(val) && !isNaN(thresh)) { if (String(k.threshold).includes('<')) isGood = val < thresh; else isGood = val >= thresh; }
+                return `<div class="border rounded p-3 shadow-sm flex flex-col justify-between bg-white hover:shadow-md transition cursor-pointer" onclick="openKPIModal(${k.originalIndex})"><div class="flex justify-between items-start mb-2"><span class="font-semibold text-sm text-gray-800 break-words w-3/4">${k.name}</span><span class="text-[10px] bg-blue-50 text-blue-600 px-2 rounded-full">${k.frequency}</span></div><div class="flex justify-between items-end"><div><p class="text-[10px] text-gray-400 uppercase">Current</p><p class="text-xl font-bold ${isGood?'text-green-600':'text-red-600'}">${k.value}</p></div><div class="text-right"><p class="text-[10px] text-gray-400 uppercase">Threshold</p><p class="text-xs font-medium">${k.threshold}</p></div></div></div>`}).join('')}</div></div>`).join('');
+            lucide.createIcons();
+            renderSummary();
+        }
+
+        function openKPIModal(idx = null) {
+            const isEdit = idx !== null && typeof idx === 'number';
+            document.getElementById('kpi-modal-title').textContent = isEdit ? 'Edit KPI' : 'Add New KPI';
+            document.getElementById('kpi-index').value = isEdit ? idx : '';
+            document.getElementById('btn-delete-kpi').classList.toggle('hidden', !isEdit);
+            if(isEdit) {
+                const k = kpiData[idx];
+                document.getElementById('kpi-category').value = k.category;
+                document.getElementById('kpi-name').value = k.name;
+                document.getElementById('kpi-value').value = k.value;
+                document.getElementById('kpi-threshold').value = k.threshold;
+                document.getElementById('kpi-freq').value = k.frequency;
+                document.getElementById('kpi-tool').value = k.tool || '';
+            } else {
+                ['kpi-category','kpi-name','kpi-value','kpi-threshold','kpi-freq','kpi-tool'].forEach(id => document.getElementById(id).value = '');
+            }
+            document.getElementById('modal-kpi').classList.add('open');
+        }
+
+        function saveKPI() {
+            const idx = document.getElementById('kpi-index').value;
+            const item = { category: document.getElementById('kpi-category').value || 'General', name: document.getElementById('kpi-name').value, value: document.getElementById('kpi-value').value, threshold: document.getElementById('kpi-threshold').value, frequency: document.getElementById('kpi-freq').value, tool: document.getElementById('kpi-tool').value };
+            if(!item.name) return alert('KPI Name required');
+            if(idx !== '') kpiData[idx] = item; else kpiData.push(item);
+            closeModal('modal-kpi');
+            renderKPIs();
+        }
+
+        function deleteKPI() {
+            const idx = document.getElementById('kpi-index').value;
+            if(idx !== '') { closeModal('modal-kpi'); document.getElementById('delete-target-id').value = idx; document.getElementById('delete-type').value = 'kpi'; document.querySelector('#modal-delete-confirm h3').innerText = 'Delete KPI?'; document.getElementById('modal-delete-confirm').classList.add('open'); }
+        }
+
+        function renderBauStats() {
+            document.getElementById('bau-total').innerText = bauData.totalTickets;
+            document.getElementById('bau-within').innerText = bauData.withinSLA;
+            document.getElementById('bau-breached').innerText = bauData.breachedSLA;
+            document.getElementById('bau-sla').innerText = bauData.slaPercentage + '%';
+            renderSummary();
+        }
+
+        function openBlockerModal() {
+            ['bl-title','bl-severity','bl-owner','bl-eta'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('bl-id').value = '';
+            document.getElementById('blocker-modal-title').innerText = 'Add New Highlight / Blocker';
+            document.getElementById('modal-blocker').classList.add('open');
+        }
+
+        // --- COMMON MODAL HANDLERS ---
+        function openMilestoneModal(idx = null) {
+            const isEdit = idx !== null; document.getElementById('milestone-modal-title').textContent = isEdit ? 'Edit Milestone' : 'Add New';
+            document.getElementById('ms-index').value = isEdit ? idx : '';
+            document.getElementById('btn-delete-ms').classList.toggle('hidden', !isEdit);
+            if(isEdit) { const m = milestones[idx]; document.getElementById('ms-phase').value = m.phase; document.getElementById('ms-start').value = m.startDate; document.getElementById('ms-end').value = m.endDate; document.getElementById('ms-act-start').value = m.actualStartDate; document.getElementById('ms-act-end').value = m.actualEndDate; document.getElementById('ms-remark').value = m.remark; } 
+            else { ['ms-phase','ms-start','ms-end','ms-act-start','ms-act-end','ms-remark'].forEach(id => document.getElementById(id).value = ''); }
+            document.getElementById('modal-milestone').classList.add('open');
+        }
+        function saveMilestone() { const idx = document.getElementById('ms-index').value; const item = { phase: document.getElementById('ms-phase').value, startDate: document.getElementById('ms-start').value, endDate: document.getElementById('ms-end').value, actualStartDate: document.getElementById('ms-act-start').value, actualEndDate: document.getElementById('ms-act-end').value, remark: document.getElementById('ms-remark').value }; if(!item.phase) return alert('Activity Name required'); if(idx === '') milestones.push(item); else milestones[idx] = item; closeModal('modal-milestone'); renderMilestones(); }
+        function deleteMilestone() { const idx = document.getElementById('ms-index').value; if(idx !== '') { milestones.splice(idx, 1); closeModal('modal-milestone'); renderMilestones(); } }
+        function openDisciplineModal() { switchDiscTab('L1'); document.getElementById('modal-discipline').classList.add('open'); }
+        function switchDiscTab(tab) { discModalTab = tab; document.getElementById('tab-l1-btn').className = `px-4 py-2 text-sm font-medium border-b-2 ${tab==='L1'?'border-teal-600 text-teal-600':'border-transparent text-gray-500'}`; document.getElementById('tab-l2-btn').className = `px-4 py-2 text-sm font-medium border-b-2 ${tab==='L2'?'border-teal-600 text-teal-600':'border-transparent text-gray-500'}`; const content = document.getElementById('disc-tab-content'); if (tab === 'L1') { content.innerHTML = `<table class="min-w-full divide-y divide-gray-200 mb-6"><thead class="bg-gray-50"><tr><th>Discipline</th><th>Total</th><th>Open</th><th>Closed</th><th>Hold</th><th>Grand Total</th></tr></thead><tbody>${taskDisciplines.map((d,i) => `<tr><td class="p-2 font-medium">${d.discipline}</td><td class="p-2"><input type="number" class="w-full border rounded p-1 text-center" value="${d.totalTasks}" oninput="updateL1(${i},'totalTasks',this.value)"></td><td class="p-2"><input type="number" class="w-full border rounded p-1 text-center" value="${d.openTasks}" oninput="updateL1(${i},'openTasks',this.value)"></td><td class="p-2"><input type="number" class="w-full border rounded p-1 text-center" value="${d.closedTasks}" oninput="updateL1(${i},'closedTasks',this.value)"></td><td class="p-2"><input type="number" class="w-full border rounded p-1 text-center" value="${d.holdTasks}" oninput="updateL1(${i},'holdTasks',this.value)"></td><td class="p-2"><input type="number" id="grand-total-${i}" class="w-full border rounded p-1 text-center font-bold bg-gray-100 text-gray-600 cursor-not-allowed" value="${d.grandTotal}" readonly></td></tr>`).join('')}</tbody></table>`; } else { renderL2EditMode(); } }
+        function updateL1(i, f, v) { taskDisciplines[i][f] = parseInt(v) || 0; if (['openTasks', 'closedTasks', 'holdTasks'].includes(f)) { const open = parseInt(taskDisciplines[i].openTasks) || 0; const closed = parseInt(taskDisciplines[i].closedTasks) || 0; const hold = parseInt(taskDisciplines[i].holdTasks) || 0; taskDisciplines[i].grandTotal = open + closed + hold; document.getElementById(`grand-total-${i}`).value = taskDisciplines[i].grandTotal; } }
+        function addL2Col() { l2Columns.push({id:`c${Date.now()}`,name:'New'}); renderL2EditMode(); }
+        function delL2Col(i) { l2Columns.splice(i,1); renderL2EditMode(); }
+        function updL2ColName(i,v) { l2Columns[i].name=v; }
+        function addL2Row(disc) { l2Data[disc].push({feature:''}); renderL2EditMode(); }
+        function delL2Row(disc,i) { l2Data[disc].splice(i,1); renderL2EditMode(); }
+        function updL2Cell(disc,i,key,val) { l2Data[disc][i][key] = val; }
+        function saveDisciplineData() { renderDisciplineTable(); renderL2Details(); closeModal('modal-discipline'); }
+        function toggleL2Details(disc) { if (disc === 'ALL') expandedDiscipline = expandedDiscipline === 'ALL' ? null : 'ALL'; else expandedDiscipline = expandedDiscipline === disc ? null : disc; renderDisciplineTable(); renderL2Details(); }
+        function renderL2EditMode() { const content = document.getElementById('disc-tab-content'); let html = `<div class="bg-gray-50 p-4 rounded mb-4 border border-gray-200"><div class="flex justify-between mb-2"><h4 class="font-bold text-sm text-gray-700">Manage Columns</h4><button onclick="addL2Col()" class="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-200 hover:bg-blue-100">+ Add Column</button></div><div class="flex flex-wrap gap-2">${l2Columns.map((c, i) => `<div class="flex items-center bg-white border rounded"><input value="${c.name}" onchange="updL2ColName(${i},this.value)" class="p-1 text-xs w-20 outline-none rounded-l focus:ring-1 focus:ring-teal-500"><button onclick="delL2Col(${i})" class="text-red-500 px-2 hover:bg-red-50 border-l">×</button></div>`).join('')}</div></div><div class="space-y-4">`; Object.keys(l2Data).forEach(disc => { html += `<div class="border rounded p-3"><div class="flex justify-between mb-2"><h5 class="font-bold text-sm text-gray-700">${disc}</h5><button onclick="addL2Row('${disc}')" class="text-xs text-teal-700 bg-teal-50 px-2 py-1 rounded border border-teal-100 hover:bg-teal-100">+ Add Row</button></div><table class="w-full text-xs"><thead><tr><th class="text-left font-medium text-gray-500">Feature</th>${l2Columns.map(c=>`<th class="text-center font-medium text-gray-500">${c.name}</th>`).join('')}<th></th></tr></thead><tbody>${l2Data[disc].map((r, ri) => `<tr><td class="p-1"><input value="${r.feature||''}" onchange="updL2Cell('${disc}',${ri},'feature',this.value)" class="w-full border p-1 rounded"></td>${l2Columns.map(c => `<td class="p-1"><input value="${r[c.id]||''}" onchange="updL2Cell('${disc}',${ri},'${c.id}',this.value)" class="w-full border p-1 rounded text-center"></td>`).join('')}<td class="p-1 text-right"><button onclick="delL2Row('${disc}',${ri})" class="text-red-500 hover:text-red-700">×</button></td></tr>`).join('')}</tbody></table></div>`; }); html += `</div>`; content.innerHTML = html; }
+
+        function openAdoModal(source = 'build') { adoSyncSource = source; document.getElementById('modal-ado').classList.add('open'); document.getElementById('ado-error').classList.add('hidden'); }
+
+        async function handleAdoSync() {
+            const org = document.getElementById('ado-org').value.trim();
+            const project = document.getElementById('ado-proj').value.trim();
+            const queryId = document.getElementById('ado-query').value.trim();
+            const pat = document.getElementById('ado-pat').value.trim();
+            const errorEl = document.getElementById('ado-error');
+            const btn = document.getElementById('btn-sync-ado');
+
+            if (!org || !project || !queryId || !pat) { errorEl.textContent = "Please fill in all fields."; errorEl.classList.remove('hidden'); return; }
+
+            btn.disabled = true; btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i> Syncing...`; lucide.createIcons(); errorEl.classList.add('hidden');
+
+            try {
+                const authHeader = 'Basic ' + btoa(':' + pat);
+                const baseUrl = `https://dev.azure.com/${encodeURIComponent(org)}/${encodeURIComponent(project)}/_apis`;
+                const queryResponse = await fetch(`${baseUrl}/wit/wiql/${queryId}?api-version=6.0`, { method: 'GET', headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' } });
+                if (!queryResponse.ok) throw new Error(`Query Failed: ${queryResponse.status}`);
+                const queryData = await queryResponse.json();
+                if (!queryData.workItems || queryData.workItems.length === 0) throw new Error("0 work items.");
+                const ids = queryData.workItems.slice(0, 200).map(wi => wi.id).join(',');
+                const detailsResponse = await fetch(`${baseUrl}/wit/workitems?ids=${ids}&api-version=6.0`, { method: 'GET', headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' } });
+                if (!detailsResponse.ok) throw new Error(`Details Failed`);
+                const detailsData = await detailsResponse.json();
+                
+                if (adoSyncSource === 'run') {
+                    const processedTickets = detailsData.value.map(item => {
+                        const f = item.fields; const tags = (f['System.Tags'] || '').toLowerCase(); let ticketType = 'Medium'; 
+                        if(tags.includes('small')) ticketType = 'Small'; else if(tags.includes('large')) ticketType = 'Large';
+                        const actualTime = calculateBusinessHours(new Date(f['Microsoft.VSTS.Common.ActivatedDate'] || f['System.CreatedDate']), new Date(f['Microsoft.VSTS.Common.ClosedDate'] || new Date()));
+                        return { id: f['System.Id'], title: f['System.Title'], type: ticketType, actualTime: parseFloat(actualTime.toFixed(2)), threshold: { 'Small': 4, 'Medium': 6, 'Large': 8 }[ticketType] };
+                    });
+                    document.getElementById('run-iframe').contentWindow.postMessage({ type: 'ADO_DATA_FOR_RUN', payload: processedTickets }, '*');
+                } else if (adoSyncSource === 'discipline') {
+                    pendingDisciplineData = detailsData.value;
+                    renderMappingUI([...new Set(detailsData.value.map(i => i.fields['System.AssignedTo']?.displayName || 'Unassigned'))].sort());
+                } else if (adoSyncSource === 'bugs') {
+                    bugs = detailsData.value.map(item => {
+                        const f = item.fields; return { id: String(item.id), type: 'Bug', description: f['System.Title'], stage: normalizeBugStage(f['System.State']), owner: f['System.AssignedTo']?.displayName || 'Unassigned', eta: '-' };
+                    });
+                    renderBugTiles();
+                } else {
+                    userStories = detailsData.value.map(item => {
+                        const f = item.fields; return { id: String(item.id), type: f['System.WorkItemType'], description: f['System.Title'], stage: normalizeStage(f['System.State']), owner: f['System.AssignedTo']?.displayName || 'Unassigned', eta: '-' };
+                    });
+                    renderUserStoryTiles();
+                }
+                closeModal('modal-ado'); alert(`Synced ${detailsData.value.length} items!`);
+            } catch (error) { errorEl.textContent = error.message; errorEl.classList.remove('hidden'); } finally { btn.disabled = false; btn.innerHTML = `Sync Now`; lucide.createIcons(); }
+        }
+
+        function loadMockAdoData() {
+            const mockStories = [ { id: '101', type: 'User Story', description: 'Implement Login Page', stage: 'Development', owner: 'Jane Doe', eta: '2023-11-15' }, { id: '102', type: 'Bug', description: 'Fix CSS Grid Issue', stage: 'New', owner: 'John Smith', eta: '2023-11-20' } ];
+            const mockBugs = [ { id: 'B01', type: 'Bug', description: 'API Timeout', stage: 'New', owner: 'Alice', eta: '-' }, { id: 'B02', type: 'Bug', description: 'Button misalignment', stage: 'Active', owner: 'Bob', eta: '-' } ];
+            if (adoSyncSource === 'bugs') { bugs = mockBugs; renderBugTiles(); } 
+            else if (adoSyncSource === 'run') { document.getElementById('run-iframe').contentWindow.postMessage({ type: 'ADO_DATA_FOR_RUN', payload: [ { id: '201', title: 'Update Links', type: 'Small', actualTime: 2.5, threshold: 4 } ] }, '*'); } 
+            else { userStories = mockStories; renderUserStoryTiles(); }
+            closeModal('modal-ado');
+        }
+
+        function renderMappingUI(users) {
+            const container = document.getElementById('mapping-container'); const disciplines = ['DMT', 'Tech', 'Content Mgmt.', 'QA', 'Ignore'];
+            container.innerHTML = users.map(user => `<div class="flex items-center justify-between bg-white p-3 rounded border shadow-sm"><span>${user}</span><select data-owner="${user}" class="border rounded p-1 text-sm">${disciplines.map(d => `<option value="${d}">${d}</option>`).join('')}</select></div>`).join('');
+            document.getElementById('modal-mapping').classList.add('open');
+        }
+
+        function applyDisciplineMapping() {
+            const selects = document.querySelectorAll('#mapping-container select'); profileToDisciplineMap = {}; selects.forEach(sel => { profileToDisciplineMap[sel.getAttribute('data-owner')] = sel.value; });
+            taskDisciplines.forEach(d => { d.totalTasks=0; d.openTasks=0; d.closedTasks=0; d.holdTasks=0; d.grandTotal=0; }); l3Data = [];
+            pendingDisciplineData.forEach(item => { 
+                const f = item.fields; const discipline = profileToDisciplineMap[f['System.AssignedTo']?.displayName || 'Unassigned'];
+                if (discipline && discipline !== 'Ignore') {
+                    const targetDisc = taskDisciplines.find(d => d.discipline === discipline);
+                    if (targetDisc) {
+                        let status = normalizeBugStage(f['System.State']);
+                        if (status === 'Closed') targetDisc.closedTasks++; else if (status === 'Hold') targetDisc.holdTasks++; else targetDisc.openTasks++;
+                        targetDisc.totalTasks++; targetDisc.grandTotal = targetDisc.openTasks + targetDisc.closedTasks + targetDisc.holdTasks;
+                        l3Data.push({ _uuid: generateUUID(), id: String(item.id), title: f['System.Title'], status: status === 'Active' ? 'Open' : status, owner: f['System.AssignedTo']?.displayName, discipline: discipline, eta: '-' });
+                    }
+                }
+            });
+            renderDisciplineTable(); closeModal('modal-mapping');
+        }
+
+        function calculateStatus(m) {
+            const today = new Date(); today.setHours(0,0,0,0); const toDate = (d) => d ? new Date(d) : null; const planEnd = toDate(m.endDate); const actEnd = toDate(m.actualEndDate); let statusKey = 'pending'; let execLabel = 'YTB'; let execColor = 'text-gray-500 bg-gray-100';
+            if(actEnd) { statusKey = 'completed'; execLabel = 'Completed'; execColor = 'text-green-700 bg-green-100 border-green-200'; } else if(toDate(m.actualStartDate)) { statusKey = 'in-progress'; execLabel = 'In-Progress'; execColor = 'text-blue-700 bg-blue-100 border-blue-200'; }
+            let tracker = 'Pending'; let color = 'bg-gray-300'; 
+            if (statusKey === 'completed') { color = 'bg-green-500'; tracker = (actEnd <= planEnd) ? 'On Track' : 'Delayed'; } 
+            else if (statusKey === 'in-progress') { color = 'bg-blue-500'; tracker = (today > planEnd) ? 'Delayed' : 'On Track'; }
+            return { status: statusKey, tracker, color, execLabel, execColor };
+        }
+
+        function calculateAutoSummary() {
+            let summary = [];
+            if (milestones.length > 0) { const completed = milestones.filter(m => calculateStatus(m).status === 'completed').length; summary.push(`Project execution is at ${Math.round((completed / milestones.length) * 100)}% completion.`); }
+            if (bugs.length > 0) { summary.push(`Currently tracking ${bugs.length} total bugs, with ${bugs.filter(b=>b.stage==='New').length} new and ${bugs.filter(b=>b.stage==='Active').length} active issues.`); }
+            if (bauData.totalTickets > 0) { summary.push(`SLA performance is at ${bauData.slaPercentage}%.`); }
+            return summary.length === 0 ? "No sufficient data. Double-click here to write your own." : summary.join("\n\n");
+        }
+
+        function renderSummary() {
+            const section = document.getElementById('summary-section'); const displayEl = document.getElementById('summary-display'); section.classList.remove('hidden');
+            displayEl.innerText = savedSummaryText !== null ? savedSummaryText : calculateAutoSummary();
+        }
+
+        function toggleSummaryEdit() { document.getElementById('summary-input').value = document.getElementById('summary-display').innerText; document.getElementById('summary-display').classList.add('hidden'); document.getElementById('summary-edit').classList.remove('hidden'); }
+        function saveSummary() { savedSummaryText = document.getElementById('summary-input').value; cancelSummaryEdit(); renderSummary(); }
+        function cancelSummaryEdit() { document.getElementById('summary-display').classList.remove('hidden'); document.getElementById('summary-edit').classList.add('hidden'); }
+        function regenerateSummary() { if(confirm("Overwrite?")) { savedSummaryText = null; renderSummary(); } }
+        function deleteSummaryText() { if(confirm("Delete?")) { savedSummaryText = ""; renderSummary(); } }
+
+        
+
+        // =========================
+        // WORKSPACE MANAGER (NEW)
+        // - Multiple dashboards by POD/Project name
+        // - Local persistence using localStorage
+        // =========================
+        const WS_STORAGE_KEY = 'execdash.workspaces.v1';
+        const WS_LAST_KEY = 'execdash.lastWorkspaceId.v1';
+        const WS_SCHEMA_VERSION = 1;
+
+        let wsCurrentId = null;
+        let wsLastSerialized = null;
+        let wsAutoSaveTimer = null;
+        let wsModalMode = 'create'; // create | rename | duplicate
+        let wsModalTargetId = null;
+        let wsIsApplying = false;
+
+        function wsSafeClone(obj) {
+            try { return JSON.parse(JSON.stringify(obj)); } catch (e) { return obj; }
+        }
+
+        function wsReadCandidateValue(ids) {
+            for (const id of ids) {
+                const el = document.getElementById(id);
+                if (el && typeof el.value !== 'undefined') return el.value;
+            }
+            return '';
+        }
+
+        function wsSetIndicator(text, ok=false) {
+            const el = document.getElementById('ws-saved-indicator');
+            if (!el) return;
+            el.textContent = text;
+            el.className = 'text-xs ml-2 ' + (ok ? 'text-green-700' : 'text-gray-500');
+        }
+
+        function wsLoadStore() {
+            try {
+                const raw = localStorage.getItem(WS_STORAGE_KEY);
+                if (!raw) return { schemaVersion: WS_SCHEMA_VERSION, workspaces: {} };
+                const parsed = JSON.parse(raw);
+                // Minimal validation
+                if (!parsed || typeof parsed !== 'object') return { schemaVersion: WS_SCHEMA_VERSION, workspaces: {} };
+                if (!parsed.workspaces) parsed.workspaces = {};
+                return parsed;
+            } catch (e) {
+                return { schemaVersion: WS_SCHEMA_VERSION, workspaces: {} };
+            }
+        }
+
+        function wsSaveStore(store) {
+            localStorage.setItem(WS_STORAGE_KEY, JSON.stringify(store));
+        }
+
+        function wsList() {
+            const store = wsLoadStore();
+            const arr = Object.values(store.workspaces || {});
+            // Sort by updatedAt desc
+            arr.sort((a,b) => (b.updatedAt||'').localeCompare(a.updatedAt||''));
+            return arr;
+        }
+
+        function wsGetSelectedTab() {
+            const buildBtn = document.getElementById('tab-build');
+            if (buildBtn && buildBtn.classList.contains('bg-white')) return 'build';
+            return 'run';
+        }
+
+        function wsGetReportVisibility() {
+            const vis = {};
+            try {
+                if (typeof reportSections !== 'undefined' && Array.isArray(reportSections)) {
+                    reportSections.forEach(s => {
+                        const el = document.getElementById(s.id);
+                        vis[s.id] = el ? !el.classList.contains('hidden-by-report') : true;
+                    });
+                }
+            } catch (e) {}
+            return vis;
+        }
+
+        function wsApplyReportVisibility(visMap) {
+            if (!visMap) return;
+            try {
+                Object.keys(visMap).forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    const shouldShow = !!visMap[id];
+                    el.classList.toggle('hidden-by-report', !shouldShow);
+                    const cb = document.getElementById(`toggle-${id}`);
+                    if (cb) cb.checked = shouldShow;
+                });
+            } catch (e) {}
+        }
+
+        function wsGetState() {
+            // NOTE: We store ONLY non-sensitive config. Do not store PAT by default.
+            const adoOrg = wsReadCandidateValue(['adoOrg', 'ado-org', 'adoOrganization', 'organization', 'ado-organization']);
+            const adoProject = wsReadCandidateValue(['adoProject', 'ado-project', 'adoProjectName', 'project', 'ado-project-name']);
+            const adoQueryId = wsReadCandidateValue(['adoQueryId', 'ado-query', 'ado-queryId', 'queryId', 'ado-query-id']);
+
+            // Headless dashboard state (from the other inline script)
+            let headless = {};
+            try {
+                if (typeof loadedTicketData !== 'undefined') {
+                    headless.loadedTicketData = wsSafeClone(loadedTicketData);
+                }
+            } catch (e) { headless.loadedTicketData = null; }
+
+            // Executive dashboard state
+            const executive = {
+                milestones: wsSafeClone(typeof milestones !== 'undefined' ? milestones : []),
+                userStories: wsSafeClone(typeof userStories !== 'undefined' ? userStories : []),
+                bugs: wsSafeClone(typeof bugs !== 'undefined' ? bugs : []),
+                blockers: wsSafeClone(typeof blockers !== 'undefined' ? blockers : []),
+                kpiData: wsSafeClone(typeof kpiData !== 'undefined' ? kpiData : []),
+                taskDisciplines: wsSafeClone(typeof taskDisciplines !== 'undefined' ? taskDisciplines : []),
+                pendingDisciplineData: wsSafeClone(typeof pendingDisciplineData !== 'undefined' ? pendingDisciplineData : []),
+                profileToDisciplineMap: wsSafeClone(typeof profileToDisciplineMap !== 'undefined' ? profileToDisciplineMap : {}),
+                l2Columns: wsSafeClone(typeof l2Columns !== 'undefined' ? l2Columns : []),
+                l2Data: wsSafeClone(typeof l2Data !== 'undefined' ? l2Data : {}),
+                tempAdoTasks: wsSafeClone(typeof tempAdoTasks !== 'undefined' ? tempAdoTasks : []),
+                l3Data: wsSafeClone(typeof l3Data !== 'undefined' ? l3Data : []),
+                expandedDiscipline: (typeof expandedDiscipline !== 'undefined' ? expandedDiscipline : 'ALL'),
+                activeUsStage: (typeof activeUsStage !== 'undefined' ? activeUsStage : 'New'),
+                activeBugStage: (typeof activeBugStage !== 'undefined' ? activeBugStage : 'New'),
+                bauData: wsSafeClone(typeof bauData !== 'undefined' ? bauData : { totalTickets: 0, withinSLA: 0, breachedSLA: 0, slaPercentage: 0 }),
+                showTrackerDetails: (typeof showTrackerDetails !== 'undefined' ? showTrackerDetails : false),
+                showL2Details: (typeof showL2Details !== 'undefined' ? showL2Details : false),
+                discModalTab: (typeof discModalTab !== 'undefined' ? discModalTab : 'L1'),
+                savedSummaryText: (typeof savedSummaryText !== 'undefined' ? savedSummaryText : null),
+                adoSyncSource: (typeof adoSyncSource !== 'undefined' ? adoSyncSource : null),
+                selectedTab: wsGetSelectedTab(),
+                reportVisibility: wsGetReportVisibility(),
+                adoConfig: { organization: adoOrg, project: adoProject, queryId: adoQueryId }
+            };
+
+            return {
+                schemaVersion: WS_SCHEMA_VERSION,
+                capturedAt: new Date().toISOString(),
+                executive,
+                headless
+            };
+        }
+
+        function wsApplyState(state, opts = { silent:false }) {
+            if (!state) return;
+            wsIsApplying = true;
+            try {
+                const ex = state.executive || {};
+                const hl = state.headless || {};
+
+                if (typeof milestones !== 'undefined') milestones = wsSafeClone(ex.milestones || []);
+                if (typeof userStories !== 'undefined') userStories = wsSafeClone(ex.userStories || []);
+                if (typeof bugs !== 'undefined') bugs = wsSafeClone(ex.bugs || []);
+                if (typeof blockers !== 'undefined') blockers = wsSafeClone(ex.blockers || []);
+                if (typeof kpiData !== 'undefined') kpiData = wsSafeClone(ex.kpiData || []);
+                if (typeof taskDisciplines !== 'undefined') taskDisciplines = wsSafeClone(ex.taskDisciplines || taskDisciplines);
+                if (typeof pendingDisciplineData !== 'undefined') pendingDisciplineData = wsSafeClone(ex.pendingDisciplineData || []);
+                if (typeof profileToDisciplineMap !== 'undefined') profileToDisciplineMap = wsSafeClone(ex.profileToDisciplineMap || {});
+                if (typeof l2Columns !== 'undefined') l2Columns = wsSafeClone(ex.l2Columns || l2Columns);
+                if (typeof l2Data !== 'undefined') l2Data = wsSafeClone(ex.l2Data || l2Data);
+                if (typeof tempAdoTasks !== 'undefined') tempAdoTasks = wsSafeClone(ex.tempAdoTasks || []);
+                if (typeof expandedDiscipline !== 'undefined') expandedDiscipline = ex.expandedDiscipline || 'ALL';
+                if (typeof activeUsStage !== 'undefined') activeUsStage = ex.activeUsStage || 'New';
+                if (typeof activeBugStage !== 'undefined') activeBugStage = ex.activeBugStage || 'New';
+                if (typeof bauData !== 'undefined') bauData = wsSafeClone(ex.bauData || bauData);
+                if (typeof showTrackerDetails !== 'undefined') showTrackerDetails = !!ex.showTrackerDetails;
+                if (typeof showL2Details !== 'undefined') showL2Details = !!ex.showL2Details;
+                if (typeof discModalTab !== 'undefined') discModalTab = ex.discModalTab || 'L1';
+                if (typeof savedSummaryText !== 'undefined') savedSummaryText = (typeof ex.savedSummaryText !== 'undefined' ? ex.savedSummaryText : null);
+                if (typeof adoSyncSource !== 'undefined') adoSyncSource = ex.adoSyncSource || null;
+
+                // Restore Headless ticket data
+                try {
+                    if (typeof loadedTicketData !== 'undefined') loadedTicketData = wsSafeClone(hl.loadedTicketData || null);
+                } catch (e) {}
+
+                // Apply report visibility + selected tab
+                wsApplyReportVisibility(ex.reportVisibility);
+                try { if (ex.selectedTab && typeof switchTab === 'function') switchTab(ex.selectedTab); } catch (e) {}
+
+                // Restore ADO config (non-sensitive)
+                try {
+                    const map = ex.adoConfig || {};
+                    const setVal = (ids, v) => {
+                        for (const id of ids) {
+                            const el = document.getElementById(id);
+                            if (el) { el.value = v || ''; break; }
+                        }
+                    };
+                    setVal(['adoOrg','ado-org','organization','ado-organization'], map.organization);
+                    setVal(['adoProject','ado-project','project','ado-project-name'], map.project);
+                    setVal(['adoQueryId','ado-query','queryId','ado-query-id'], map.queryId);
+                } catch (e) {}
+
+                if (!opts.silent) {
+                    // Re-render everything
+                    try { if (typeof renderAll === 'function') renderAll(); } catch (e) {}
+                    try { if (typeof loadedTicketData !== 'undefined' && loadedTicketData && typeof generateDashboard === 'function') generateDashboard(); } catch (e) {}
+                }
+            } finally {
+                wsIsApplying = false;
+            }
+        }
+
+        function wsCreateWorkspace(name, baseState=null) {
+            const store = wsLoadStore();
+            const id = (typeof generateUUID === 'function') ? generateUUID() : ('ws-' + Date.now());
+            const now = new Date().toISOString();
+            store.workspaces[id] = {
+                id,
+                name,
+                createdAt: now,
+                updatedAt: now,
+                state: baseState || wsGetState()
+            };
+            wsSaveStore(store);
+            localStorage.setItem(WS_LAST_KEY, id);
+            return id;
+        }
+
+        function wsUpdateWorkspace(id, state) {
+            const store = wsLoadStore();
+            if (!store.workspaces[id]) return;
+            store.workspaces[id].state = state;
+            store.workspaces[id].updatedAt = new Date().toISOString();
+            wsSaveStore(store);
+            localStorage.setItem(WS_LAST_KEY, id);
+        }
+
+        function wsRefreshSelect() {
+            const select = document.getElementById('ws-select');
+            if (!select) return;
+            const items = wsList();
+            select.innerHTML = '';
+            if (items.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = ''; opt.textContent = 'No workspaces';
+                select.appendChild(opt);
+                return;
+            }
+            items.forEach(w => {
+                const opt = document.createElement('option');
+                opt.value = w.id;
+                opt.textContent = w.name;
+                select.appendChild(opt);
+            });
+            if (wsCurrentId) select.value = wsCurrentId;
+        }
+
+        function wsEnsureDefault() {
+            const items = wsList();
+            if (items.length === 0) {
+                wsCurrentId = wsCreateWorkspace('Default');
+            }
+        }
+
+        function wsSelectWorkspace(id, { saveCurrent=true } = {}) {
+            if (!id || id === wsCurrentId) return;
+            if (saveCurrent && wsCurrentId) wsSaveNow();
+            const store = wsLoadStore();
+            const w = store.workspaces[id];
+            if (!w) return;
+            wsCurrentId = id;
+            localStorage.setItem(WS_LAST_KEY, id);
+            wsApplyState(w.state);
+            wsRefreshSelect();
+            wsSetIndicator(`Loaded: ${w.name}`, true);
+        }
+
+        function wsSaveNow() {
+            if (wsIsApplying) return;
+            if (!wsCurrentId) return;
+            const state = wsGetState();
+            wsUpdateWorkspace(wsCurrentId, state);
+            wsLastSerialized = JSON.stringify(state);
+            wsSetIndicator('Saved ✓ ' + new Date().toLocaleTimeString(), true);
+        }
+
+        function wsAutoSaveTick() {
+            if (!wsCurrentId || wsIsApplying) return;
+            try {
+                const state = wsGetState();
+                const ser = JSON.stringify(state);
+                if (wsLastSerialized === null) {
+                    wsLastSerialized = ser;
+                    return;
+                }
+                if (ser !== wsLastSerialized) {
+                    wsUpdateWorkspace(wsCurrentId, state);
+                    wsLastSerialized = ser;
+                    wsSetIndicator('Auto-saved ✓ ' + new Date().toLocaleTimeString(), true);
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        function wsStartAutoSave() {
+            if (wsAutoSaveTimer) return;
+            wsAutoSaveTimer = setInterval(wsAutoSaveTick, 8000);
+        }
+
+        function wsInitWorkspaceManager() {
+            // Hook select change
+            const select = document.getElementById('ws-select');
+            if (select) {
+                select.addEventListener('change', (e) => wsSelectWorkspace(e.target.value));
+            }
+
+            // Hook import
+            const importEl = document.getElementById('ws-import-file');
+            if (importEl) {
+                importEl.addEventListener('change', (e) => {
+                    const f = e.target.files && e.target.files[0];
+                    if (f) wsImportFile(f);
+                    e.target.value = '';
+                });
+            }
+
+            wsEnsureDefault();
+            const lastId = localStorage.getItem(WS_LAST_KEY);
+            const store = wsLoadStore();
+            const targetId = (lastId && store.workspaces[lastId]) ? lastId : (wsList()[0] ? wsList()[0].id : null);
+            wsCurrentId = targetId;
+            wsRefreshSelect();
+
+            if (wsCurrentId && store.workspaces[wsCurrentId]) {
+                wsApplyState(store.workspaces[wsCurrentId].state, { silent:true });
+                wsLastSerialized = JSON.stringify(store.workspaces[wsCurrentId].state || {});
+                wsSetIndicator('Loaded ✓', true);
+            } else {
+                wsSetIndicator('Ready', true);
+            }
+        }
+
+        // --- Modal helpers ---
+        function wsOpenCreateModal() {
+            wsModalMode = 'create';
+            wsModalTargetId = null;
+            document.getElementById('ws-modal-title').textContent = 'Create Workspace';
+            document.getElementById('ws-modal-hint').textContent = 'Creates a new POD/Project workspace and starts saving this dashboard separately.';
+            document.getElementById('ws-name').value = '';
+            document.getElementById('ws-modal-primary').textContent = 'Create';
+            document.getElementById('ws-modal').classList.add('open');
+        }
+
+        function wsCloseModal() {
+            document.getElementById('ws-modal').classList.remove('open');
+        }
+
+        function wsModalPrimary() {
+            const name = (document.getElementById('ws-name').value || '').trim();
+            if (!name) { showAlert('Please enter a POD/Project name.'); return; }
+
+            if (wsModalMode === 'create') {
+                // Save current workspace before creating new
+                if (wsCurrentId) wsSaveNow();
+                const newId = wsCreateWorkspace(name);
+                wsCurrentId = newId;
+                wsRefreshSelect();
+                wsSetIndicator(`Created: ${name}`, true);
+            } else if (wsModalMode === 'rename') {
+                const store = wsLoadStore();
+                if (!wsModalTargetId || !store.workspaces[wsModalTargetId]) return;
+                store.workspaces[wsModalTargetId].name = name;
+                store.workspaces[wsModalTargetId].updatedAt = new Date().toISOString();
+                wsSaveStore(store);
+                wsRefreshSelect();
+                wsSetIndicator(`Renamed: ${name}`, true);
+            } else if (wsModalMode === 'duplicate') {
+                const store = wsLoadStore();
+                if (!wsModalTargetId || !store.workspaces[wsModalTargetId]) return;
+                const base = store.workspaces[wsModalTargetId];
+                const newId = wsCreateWorkspace(name, base.state);
+                wsCurrentId = newId;
+                wsRefreshSelect();
+                wsApplyState(base.state);
+                wsSetIndicator(`Duplicated: ${name}`, true);
+            }
+
+            wsCloseModal();
+        }
+
+        function wsRenameCurrent() {
+            if (!wsCurrentId) return;
+            const store = wsLoadStore();
+            const w = store.workspaces[wsCurrentId];
+            if (!w) return;
+            wsModalMode = 'rename';
+            wsModalTargetId = wsCurrentId;
+            document.getElementById('ws-modal-title').textContent = 'Rename Workspace';
+            document.getElementById('ws-modal-hint').textContent = 'Renames the selected workspace (data remains unchanged).';
+            document.getElementById('ws-name').value = w.name || '';
+            document.getElementById('ws-modal-primary').textContent = 'Rename';
+            document.getElementById('ws-modal').classList.add('open');
+        }
+
+        function wsDuplicateCurrent() {
+            if (!wsCurrentId) return;
+            const store = wsLoadStore();
+            const w = store.workspaces[wsCurrentId];
+            if (!w) return;
+            wsModalMode = 'duplicate';
+            wsModalTargetId = wsCurrentId;
+            document.getElementById('ws-modal-title').textContent = 'Duplicate Workspace';
+            document.getElementById('ws-modal-hint').textContent = 'Creates a copy of the selected workspace under a new name.';
+            document.getElementById('ws-name').value = (w.name ? (w.name + ' Copy') : 'Copy');
+            document.getElementById('ws-modal-primary').textContent = 'Duplicate';
+            document.getElementById('ws-modal').classList.add('open');
+        }
+
+        function wsDeleteCurrent() {
+            if (!wsCurrentId) return;
+            const store = wsLoadStore();
+            const w = store.workspaces[wsCurrentId];
+            if (!w) return;
+            if (!confirm(`Delete workspace "${w.name}"? This cannot be undone.`)) return;
+
+            delete store.workspaces[wsCurrentId];
+            wsSaveStore(store);
+
+            const remaining = wsList();
+            wsCurrentId = remaining[0] ? remaining[0].id : null;
+            if (wsCurrentId) localStorage.setItem(WS_LAST_KEY, wsCurrentId); else localStorage.removeItem(WS_LAST_KEY);
+
+            wsRefreshSelect();
+            if (wsCurrentId) {
+                const st = wsLoadStore();
+                wsApplyState(st.workspaces[wsCurrentId].state);
+                wsSetIndicator('Deleted. Loaded another workspace.', true);
+            } else {
+                wsSetIndicator('No workspaces. Create a new one.', false);
+            }
+        }
+
+        function wsExportCurrent() {
+            if (!wsCurrentId) return;
+            const store = wsLoadStore();
+            const w = store.workspaces[wsCurrentId];
+            if (!w) return;
+            const payload = {
+                exportVersion: 1,
+                exportedAt: new Date().toISOString(),
+                workspace: w
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `workspace_${(w.name||'dashboard').replace(/[^a-z0-9-_ ]/gi,'_')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(a.href);
+            wsSetIndicator('Exported ✓', true);
+        }
+
+        function wsExportCurrentExcel() {
+            if (!wsCurrentId) return;
+            const store = wsLoadStore();
+            const w = store.workspaces[wsCurrentId];
+            if (!w) return;
+            const state = w.state || wsGetState();
+
+            if (typeof XLSX === 'undefined' || !XLSX.utils) {
+                showAlert('SheetJS (XLSX) library not loaded.');
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+
+            const safeSheetName = (name) => String(name || 'Sheet').substring(0, 31).replace(/[\\/?*\[\]]/g, '_');
+            const addJsonSheet = (name, rows) => {
+                const arr = Array.isArray(rows) ? rows : [];
+                const ws = XLSX.utils.json_to_sheet(arr);
+                XLSX.utils.book_append_sheet(wb, ws, safeSheetName(name));
+            };
+
+            const exec = (state && state.executive) ? state.executive : {};
+            const head = (state && state.headless) ? state.headless : {};
+
+            // Executive sheets
+            addJsonSheet('Milestones', exec.milestones);
+            addJsonSheet('UserStories', exec.userStories);
+            addJsonSheet('Bugs', exec.bugs);
+            addJsonSheet('Blockers', exec.blockers);
+            addJsonSheet('KPIs', exec.kpiData);
+            addJsonSheet('Disciplines_L1', exec.taskDisciplines);
+            addJsonSheet('L3_Tasks', exec.l3Data);
+            addJsonSheet('BAU', exec.bauData ? [exec.bauData] : []);
+
+            // L2 details (combined into one sheet with friendly column names)
+            try {
+                const l2Cols = Array.isArray(exec.l2Columns) ? exec.l2Columns : [];
+                const l2Data = exec.l2Data || {};
+                const combined = [];
+                Object.keys(l2Data).forEach((discipline) => {
+                    const rows = Array.isArray(l2Data[discipline]) ? l2Data[discipline] : [];
+                    rows.forEach((r) => {
+                        const obj = { Discipline: discipline, Feature: r.feature || '' };
+                        l2Cols.forEach((c) => {
+                            obj[c.name] = (r && c && c.id in r) ? r[c.id] : '';
+                        });
+                        combined.push(obj);
+                    });
+                });
+                addJsonSheet('L2_Details', combined);
+            } catch (e) {
+                // ignore L2 export failures
+            }
+
+            // Headless sheets
+            addJsonSheet('Headless_Tickets', head.loadedTicketData);
+
+            // Meta sheet
+            const meta = [{
+                workspaceId: w.id,
+                workspaceName: w.name,
+                exportedAt: new Date().toISOString(),
+                schemaVersion: (state && state.schemaVersion) ? state.schemaVersion : ''
+            }];
+            addJsonSheet('Meta', meta);
+
+            const fname = `workspace_${(w.name||'dashboard').replace(/[^a-z0-9-_ ]/gi,'_')}.xlsx`;
+            XLSX.writeFile(wb, fname);
+            wsSetIndicator('Exported Excel ✓', true);
+        }
+
+
+        function wsImportFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const payload = JSON.parse(e.target.result);
+                    const w = payload.workspace;
+                    if (!w || !w.name || !w.state) throw new Error('Invalid file');
+                    const name = w.name;
+                    const store = wsLoadStore();
+                    // If name exists, append suffix
+                    const existingNames = Object.values(store.workspaces).map(x => x.name);
+                    let finalName = name;
+                    let i = 2;
+                    while (existingNames.includes(finalName)) { finalName = name + ' (' + i + ')'; i++; }
+                    const newId = wsCreateWorkspace(finalName, w.state);
+                    wsCurrentId = newId;
+                    wsRefreshSelect();
+                    wsApplyState(w.state);
+                    wsSetIndicator(`Imported: ${finalName}`, true);
+                } catch (err) {
+                    showAlert('Import failed: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function wsClearLocalStorage() {
+            if (!confirm('Clear all saved workspaces from this browser? (Your dashboard UI will remain. You can re-import exports later.)')) return;
+            localStorage.removeItem(WS_STORAGE_KEY);
+            localStorage.removeItem(WS_LAST_KEY);
+            wsCurrentId = null;
+            wsLastSerialized = null;
+            wsEnsureDefault();
+            wsRefreshSelect();
+            wsSetIndicator('Storage cleared ✓', true);
+        }
+
+window.onload = function() {
+            lucide.createIcons();
+            wsInitWorkspaceManager();
+            wsStartAutoSave();
+            const tmpl = document.getElementById('run-dashboard-template');
+            if (tmpl) document.getElementById('run-iframe').srcdoc = tmpl.innerHTML;
+            renderAll();
+            try { if (typeof loadedTicketData !== "undefined" && loadedTicketData && typeof generateDashboard === "function") generateDashboard(); } catch(e) {}
+            window.addEventListener('message', (e) => { if (e.data && e.data.type === 'REQUEST_ADO_SYNC_RUN') openAdoModal('run'); if(e.data && e.data.type === 'BAU_UPDATE') { bauData = e.data.payload; renderBauStats(); } });
+        };
+    
+
+// =========================
+// GITHUB SYNC (v6) - SOFT FULL RESET + LOADING OVERLAY
+// - No hard reload; preserves all features.
+// - On dashboard switch/new: apply blank state, show overlay, fetch from GitHub, apply state, hide overlay.
+// - Save writes to GitHub.
+// =========================
+
+const GH6_ENDPOINT = '/api/state';
+const GH6_PARAM = 'dash';
+
+function gh6Overlay(show, msg) {
+    const ov = document.getElementById('gh-reset-overlay');
+    const m = document.getElementById('gh-reset-msg');
+    if (m && msg) m.textContent = msg;
+    if (ov) ov.style.display = show ? 'block' : 'none';
+}
+
+function gh6GetDashFromUrl() {
+    try { return new URL(window.location.href).searchParams.get(GH6_PARAM); } catch { return null; }
+}
+function gh6SetDashInUrl(id) {
+    try {
+        const u = new URL(window.location.href);
+        u.searchParams.set(GH6_PARAM, id);
+        window.history.replaceState({}, '', u.toString());
+    } catch {}
+}
+
+async function gh6Request(method, params={}, body=null) {
+    const u = new URL(GH6_ENDPOINT, window.location.origin);
+    Object.entries(params).forEach(([k,v]) => { if (v!==undefined && v!==null) u.searchParams.set(k, String(v)); });
+    const opt = { method, headers: { 'Accept':'application/json' } };
+    if (body !== null) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+    const r = await fetch(u.toString(), opt);
+    const raw = await r.text();
+    let data = {};
+    try { data = JSON.parse(raw || '{}'); } catch(e) { data = { error:'Invalid JSON', raw }; }
+    if (!r.ok) throw new Error(`${method} ${r.status} ${r.statusText}: ${raw}`);
+    if (data.error) throw new Error(data.error + (data.details ? (' :: '+JSON.stringify(data.details)) : ''));
+    return data;
+}
+
+const gh6List = () => gh6Request('GET', { list: 1 });
+const gh6Get = (id) => gh6Request('GET', { dash: id });
+const gh6Save = (id, state) => gh6Request('POST', { dash: id }, { state });
+const gh6Delete = (id) => gh6Request('DELETE', { dash: id });
+
+// blank state builder - clears ALL major collections
+function gh6BlankState(name) {
+    const st = (typeof wsGetState === 'function') ? wsGetState() : { executive:{}, headless:{} };
+    st.executive = st.executive || {};
+    st.headless = st.headless || {};
+    st.executive.milestones = [];
+    st.executive.userStories = [];
+    st.executive.bugs = [];
+    st.executive.blockers = [];
+    st.executive.kpiData = [];
+    st.executive.pendingDisciplineData = [];
+    st.executive.profileToDisciplineMap = {};
+    st.executive.tempAdoTasks = [];
+    st.executive.l2Data = [];
+    st.executive.bauData = { totalTickets:0, withinSLA:0, breachedSLA:0, slaPercentage:'0' };
+    st.executive.expandedDiscipline = 'ALL';
+    st.executive.activeUsStage = 'New';
+    st.executive.activeBugStage = 'New';
+    st.executive.showTrackerDetails = false;
+    st.executive.showL2Details = false;
+    st.executive.discModalTab = 'L1';
+    st.executive.savedSummaryText = null;
+    st.executive.adoSyncSource = null;
+    st.executive.adoConfig = { organization:'', project:'', queryId:'' };
+    st.headless.loadedTicketData = null;
+    st.__meta = st.__meta || {};
+    st.__meta.name = name || null;
+    st.__meta.createdFrom = 'blank';
+    return st;
+}
+
+// Remove clear storage
+function wsClearLocalStorage() { alert('Clear Storage is removed.'); }
+
+// Load list from GitHub and fill workspace store (keeps existing UI)
+async function gh6SyncListIntoStore() {
+    const store = wsLoadStore();
+    const data = await gh6List();
+    const list = Array.isArray(data.dashboards) ? data.dashboards : [];
+    // keep existing store object but replace workspaces
+    store.workspaces = {};
+    list.forEach(d => {
+        store.workspaces[d.id] = {
+            id: d.id,
+            name: d.name || d.id,
+            createdAt: d.createdAt || d.updatedAt || new Date().toISOString(),
+            updatedAt: d.updatedAt || new Date().toISOString(),
+            state: null
+        };
+    });
+    wsSaveStore(store);
+    wsRefreshSelect();
+    return list;
+}
+
+// Override select workspace: full reset + fetch
+async function wsSelectWorkspace(id, { saveCurrent=true } = {}) {
+    if (!id || id === wsCurrentId) return;
+
+    // Save current (to GitHub) before switch
+    if (saveCurrent && wsCurrentId) {
+        try { await wsSaveNow(); } catch(e) { console.warn('pre-save failed', e); }
+    }
+
+    wsCurrentId = id;
+    gh6SetDashInUrl(id);
+
+    // Reset UI immediately
+    gh6Overlay(true, 'Resetting view...');
+    try {
+        const blank = gh6BlankState();
+        wsApplyState(blank, { silent:false });
+    } catch(e) {}
+
+    // Fetch latest from GitHub and apply
+    try {
+        gh6Overlay(true, 'Fetching from GitHub...');
+        const data = await gh6Get(id);
+        const state = data.state || null;
+        if (state) {
+            wsApplyState(state, { silent:false });
+            wsSetIndicator('Loaded ✓', true);
+        } else {
+            wsSetIndicator('Empty dashboard', true);
+        }
+    } catch(e) {
+        console.error(e);
+        wsSetIndicator('Load failed (see console)', false);
+    } finally {
+        gh6Overlay(false);
+    }
+
+    wsRefreshSelect();
+}
+
+// Override save: write to GitHub
+async function wsSaveNow() {
+    if (wsIsApplying) return;
+    if (!wsCurrentId) return;
+    const state = wsGetState();
+    // sync name
+    try {
+        const store = wsLoadStore();
+        const w = store.workspaces && store.workspaces[wsCurrentId];
+        state.__meta = state.__meta || {};
+        if (w && w.name) state.__meta.name = w.name;
+    } catch(e) {}
+
+    wsSetIndicator('Saving...', true);
+    gh6Overlay(true, 'Saving to GitHub...');
+    try {
+        const res = await gh6Save(wsCurrentId, state);
+        if (res.commitUrl) console.log('[GitHub] Commit URL:', res.commitUrl);
+        wsLastSerialized = JSON.stringify(state);
+        wsSetIndicator('Saved ✓ ' + new Date().toLocaleTimeString(), true);
+        await gh6SyncListIntoStore();
+    } catch(e) {
+        console.error(e);
+        wsSetIndicator('Save failed (see console)', false);
+        throw e;
+    } finally {
+        gh6Overlay(false);
+    }
+}
+
+// Override create workspace: always create blank (reset) and save
+async function wsCreateWorkspace(name, baseState=null) {
+    const store = wsLoadStore();
+    const id = (typeof generateUUID === 'function') ? generateUUID() : ('ws-' + Date.now());
+    const now = new Date().toISOString();
+
+    // Build initial state
+    const initState = baseState ? wsSafeClone(baseState) : gh6BlankState(name);
+    initState.__meta = initState.__meta || {};
+    initState.__meta.name = name;
+
+    // Reset UI immediately for NEW dashboard
+    wsCurrentId = id;
+    gh6SetDashInUrl(id);
+    gh6Overlay(true, 'Creating new dashboard...');
+    wsApplyState(gh6BlankState(name), { silent:false });
+
+    // Save to GitHub
+    await gh6Save(id, initState);
+
+    // Update store + UI
+    store.workspaces[id] = { id, name, createdAt: now, updatedAt: now, state: null };
+    wsSaveStore(store);
+    wsRefreshSelect();
+    // Now load it properly (from GitHub)
+    await wsSelectWorkspace(id, { saveCurrent:false });
+    gh6Overlay(false);
+    return id;
+}
+
+// Override delete to delete from GitHub
+async function wsDeleteCurrent() {
+    if (!wsCurrentId) return;
+    const store = wsLoadStore();
+    const w = store.workspaces[wsCurrentId];
+    if (!confirm(`Delete workspace "${w ? w.name : wsCurrentId}"? This cannot be undone.`)) return;
+    gh6Overlay(true, 'Deleting from GitHub...');
+    try {
+        await gh6Delete(wsCurrentId);
+        delete store.workspaces[wsCurrentId];
+        wsSaveStore(store);
+        wsRefreshSelect();
+        const first = wsList()[0];
+        wsCurrentId = first ? first.id : null;
+        if (wsCurrentId) await wsSelectWorkspace(wsCurrentId, { saveCurrent:false });
+        else { wsApplyState(gh6BlankState(), { silent:false }); }
+    } catch(e) {
+        console.error(e);
+        wsSetIndicator('Delete failed (see console)', false);
+    } finally {
+        gh6Overlay(false);
+    }
+}
+
+// Init override: load list from GitHub, then load selected dash
+async function wsInitWorkspaceManager() {
+    // hook select change like original
+    const select = document.getElementById('ws-select');
+    if (select) {
+        select.addEventListener('change', (e) => wsSelectWorkspace(e.target.value));
+    }
+    // hook import
+    const importEl = document.getElementById('ws-import-file');
+    if (importEl) {
+        importEl.addEventListener('change', async (e) => {
+            const f = e.target.files && e.target.files[0];
+            if (f) wsImportFile(f);
+            e.target.value = '';
+        });
+    }
+
+    gh6Overlay(true, 'Loading dashboards list...');
+    let dashboards = [];
+    try {
+        dashboards = await gh6SyncListIntoStore();
+    } catch(e) {
+        console.error(e);
+    }
+
+    // pick dash from URL else first
+    const urlId = gh6GetDashFromUrl();
+    const store = wsLoadStore();
+    const first = dashboards[0] ? dashboards[0].id : (wsList()[0] ? wsList()[0].id : null);
+    wsCurrentId = (urlId && store.workspaces[urlId]) ? urlId : first;
+
+    if (wsCurrentId) {
+        const sel = document.getElementById('ws-select');
+        if (sel) sel.value = wsCurrentId;
+        await wsSelectWorkspace(wsCurrentId, { saveCurrent:false });
+    } else {
+        // none exists: create default
+        await wsCreateWorkspace('Default', null);
+    }
+
+    gh6Overlay(false);
+    wsStartAutoSave();
+}
+
+// Auto-save: keep but it will call wsSaveNow (GitHub)
+
+</script>
+
+    <!-- Workspace Modal (NEW) -->
+    <div id="ws-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 animate-fade-in">
+            <div class="p-4 border-b flex items-center justify-between">
+                <h3 id="ws-modal-title" class="text-lg font-semibold text-gray-900">Create Workspace</h3>
+                <button type="button" onclick="wsCloseModal()" class="p-2 rounded-md hover:bg-gray-100" aria-label="Close">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">POD / Project Name <span class="text-red-500">*</span></label>
+                    <input id="ws-name" type="text" placeholder="e.g., POD-Alpha or Project Phoenix" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <p class="text-xs text-gray-500 mt-1">This name will be used to identify and switch dashboards.</p>
+                </div>
+                <div id="ws-modal-hint" class="text-xs text-gray-500"></div>
+            </div>
+            <div class="p-4 border-t flex justify-end gap-2">
+                <button type="button" onclick="wsCloseModal()" class="px-4 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200">Cancel</button>
+                <button type="button" id="ws-modal-primary" onclick="wsModalPrimary()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Save</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
