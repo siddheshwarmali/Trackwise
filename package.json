@@ -1,0 +1,12 @@
+{
+  "name": "executive-dashboard-vercel",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel deploy --prod"
+  },
+  "devDependencies": {
+    "vercel": "^34.0.0"
+  }
+}
