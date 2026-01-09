@@ -250,7 +250,7 @@
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xl font-semibold text-gray-700 flex items-center cursor-pointer select-none hover:text-indigo-600"
                             onclick="handleHeaderClick(() => toggleElement('us-action-controls'), null)"
-                            title="Click to show/hide actions">
+                            title="Double-click to toggle upload button">
                             <i data-lucide="list" class="w-5 h-5 mr-2 text-indigo-600"></i>User Story Tracker
                         </h3>
                         <div id="us-action-controls" class="flex items-center space-x-2 no-print hidden">
@@ -279,7 +279,7 @@
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xl font-semibold text-gray-700 flex items-center cursor-pointer select-none hover:text-red-600"
                             onclick="handleHeaderClick(() => toggleElement('bug-action-controls'), null)"
-                            title="Click to show/hide actions">
+                            title="Double-click to toggle upload button">
                             <i data-lucide="bug" class="w-5 h-5 mr-2 text-red-600"></i>Bugs Tracker
                         </h3>
                         <div id="bug-action-controls" class="flex items-center space-x-2 no-print hidden">
@@ -1566,7 +1566,6 @@
 
         // --- GENERIC DETAILS MODAL ---
         function openDetailsModal(dataType, stage) {
-            // Remember context so CRUD actions can refresh the same view
             window.__detailsContext = { dataType, stage };
 
             let items = [];
@@ -1587,23 +1586,23 @@
             const tbody = document.getElementById('us-details-tbody');
 
             if (items.length === 0) {
-                tbody.innerHTML = `<tr><td colspan=\"7\" class=\"p-8 text-center text-gray-500\">No items found</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-gray-500">No items found</td></tr>`;
             } else {
                 tbody.innerHTML = items.map(s => {
                     const dt = (dataType === 'US') ? 'US' : 'Bug';
                     const badgeClass = (dt === 'US') ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800';
                     return `
-                        <tr class=\"hover:bg-gray-50 text-xs transition-colors\">
-                            <td class=\"px-6 py-4 font-medium\">${s.id}</td>
-                            <td class=\"px-6 py-4\"><span class=\"bg-gray-100 border rounded px-1\">${s.type}</span></td>
-                            <td class=\"px-6 py-4 truncate max-w-xs\" title=\"${s.description}\">${s.description}</td>
-                            <td class=\"px-6 py-4\"><span class=\"${badgeClass} px-2 py-1 rounded-full\">${s.stage}</span></td>
-                            <td class=\"px-6 py-4\">${s.owner}</td>
-                            <td class=\"px-6 py-4\">${s.eta}</td>
-                            <td class=\"px-6 py-4\">
-                                <div class=\"flex items-center gap-2\">
-                                    <button class=\"px-2 py-1 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100\" onclick=\"openUsBugModal('${dt}', '${s.id}', '${s.stage}')\">Edit</button>
-                                    <button class=\"px-2 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100\" onclick=\"deleteUsBug('${dt}', '${s.id}')\">Delete</button>
+                        <tr class="hover:bg-gray-50 text-xs transition-colors">
+                            <td class="px-6 py-4 font-medium">${s.id}</td>
+                            <td class="px-6 py-4"><span class="bg-gray-100 border rounded px-1">${s.type}</span></td>
+                            <td class="px-6 py-4 truncate max-w-xs" title="${s.description}">${s.description}</td>
+                            <td class="px-6 py-4"><span class="${badgeClass} px-2 py-1 rounded-full">${s.stage}</span></td>
+                            <td class="px-6 py-4">${s.owner}</td>
+                            <td class="px-6 py-4">${s.eta}</td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-2">
+                                    <button class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100" onclick="openUsBugModal('${dt}', '${s.id}', '${s.stage}')">Edit</button>
+                                    <button class="px-2 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100" onclick="deleteUsBug('${dt}', '${s.id}')">Delete</button>
                                 </div>
                             </td>
                         </tr>
@@ -1626,7 +1625,7 @@
             document.getElementById('usbug-mode').value = mode;
 
             const stageSel = document.getElementById('usbug-stage');
-            stageSel.innerHTML = stages.map(s => `<option value=\"${s}\">${s}</option>`).join('');
+            stageSel.innerHTML = stages.map(s => `<option value="${s}">${s}</option>`).join('');
 
             const delBtn = document.getElementById('usbug-delete-btn');
             delBtn.classList.toggle('hidden', mode !== 'edit');
@@ -1681,6 +1680,7 @@
             showAlert(isUS ? 'User Story saved' : 'Bug saved', 'success');
             closeModal('modal-usbug');
             if (typeof renderAll === 'function') renderAll();
+
             if (window.__detailsContext && document.getElementById('modal-us-details').classList.contains('open')) {
                 openDetailsModal(window.__detailsContext.dataType, window.__detailsContext.stage);
             }
@@ -1691,9 +1691,11 @@
             const list = isUS ? userStories : bugs;
             const idx = list.findIndex(x => String(x.id) === String(id));
             if (idx < 0) return;
+
             if (!confirm(`Delete ${isUS ? 'User Story' : 'Bug'}: ${id}? This cannot be undone.`)) return;
             list.splice(idx, 1);
             showAlert(isUS ? 'User Story deleted' : 'Bug deleted', 'success');
+
             if (typeof renderAll === 'function') renderAll();
             if (window.__detailsContext && document.getElementById('modal-us-details').classList.contains('open')) {
                 openDetailsModal(window.__detailsContext.dataType, window.__detailsContext.stage);
@@ -2576,7 +2578,7 @@ async function gh6Request(method, params={}, body=null) {
     const r = await fetch(u.toString(), opt);
     const raw = await r.text();
     let data = {};
-    try { data = JSON.parse(raw || '{}'); } catch(e) { data = { error:'Invalid JSON', raw }; }
+    try { data = JSON.parse(raw || '{}'); } catch(e) { data = { error:'Invalid JSON', details: (raw||'').slice(0,250) }; }
     if (!r.ok) throw new Error(`${method} ${r.status} ${r.statusText}: ${raw}`);
     if (data.error) throw new Error(data.error + (data.details ? (' :: '+JSON.stringify(data.details)) : ''));
     return data;
