@@ -2541,7 +2541,7 @@ function renderBlockers() {
 window.onload = function() {
             lucide.createIcons();
             wsInitWorkspaceManager();
-            // Auto-save disabled (manual Save only)
+            wsStartAutoSave();
             const tmpl = document.getElementById('run-dashboard-template');
             if (tmpl) document.getElementById('run-iframe').srcdoc = tmpl.innerHTML;
             renderAll();
@@ -2652,6 +2652,15 @@ function wsOpenSaveConfirmModal(opts = {}) {
     const mode = opts.mode || 'manual'; // manual | switch
     const dashboardName = opts.dashboardName || '';
 
+    // If modal is missing, fallback to native confirm (prevents Save button from "doing nothing")
+    const modal = document.getElementById('modal-save-confirm');
+    if (!modal) {
+        const ok = window.confirm(mode === 'switch'
+            ? `You have unsaved changes in "${dashboardName || 'dashboard'}". Save before switching?`
+            : `Save "${dashboardName || 'dashboard'}" to GitHub?`);
+        return Promise.resolve(ok ? 'save' : 'cancel');
+    }
+
     // Populate summary
     const nameEl = document.getElementById('save-confirm-dash');
     const ctxEl  = document.getElementById('save-confirm-context');
@@ -2704,20 +2713,26 @@ function wsOpenSaveConfirmModal(opts = {}) {
 
     if (btnSkip) btnSkip.classList.toggle('hidden', mode !== 'switch');
 
-    const modal = document.getElementById('modal-save-confirm');
-    if (modal) modal.classList.add('open');
+    modal.classList.add('open');
+    try { if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons(); } catch(e) {}
 
     return new Promise((resolve) => {
         __wsSaveModalResolver = resolve;
         if (btnSave) btnSave.onclick = () => wsCloseSaveConfirmModal('save');
         if (btnSkip) btnSkip.onclick = () => wsCloseSaveConfirmModal('skip');
         if (btnCancel) btnCancel.onclick = () => wsCloseSaveConfirmModal('cancel');
+
+        // Safety: if any button missing, provide fallback close on ESC
+        window.onkeydown = (ev) => {
+            if (ev.key === 'Escape') wsCloseSaveConfirmModal('cancel');
+        };
     });
 }
 
 function wsCloseSaveConfirmModal(result) {
     const modal = document.getElementById('modal-save-confirm');
     if (modal) modal.classList.remove('open');
+    try { window.onkeydown = null; } catch(e) {}
     const r = __wsSaveModalResolver;
     __wsSaveModalResolver = null;
     if (typeof r === 'function') r(result);
@@ -2810,12 +2825,13 @@ async function wsSelectWorkspace(id, { saveCurrent=true } = {}) {
 
     // If current has unsaved changes, ask user
     if (saveCurrent && wsCurrentId && wsIsDirty()) {
-        let name = '';
+        let currentName = '';
         try {
             const st = wsLoadStore();
-            name = (st.workspaces && st.workspaces[wsCurrentId] && st.workspaces[st.workspaces[wsCurrentId].id] && st.workspaces[wsCurrentId].name) || (st.workspaces[wsCurrentId] ? st.workspaces[wsCurrentId].name : '');
-        } catch(e) {}
-        const decision = await wsOpenSaveConfirmModal({ mode:'switch', dashboardName: name });
+            currentName = (st.workspaces && st.workspaces[wsCurrentId] && st.workspaces[wsCurrentId].name) ? st.workspaces[wsCurrentId].name : wsCurrentId;
+        } catch(e) { currentName = wsCurrentId; }
+
+        const decision = await wsOpenSaveConfirmModal({ mode:'switch', dashboardName: currentName });
         if (decision === 'cancel') return;          // abort switching
         if (decision === 'save') {
             try { await wsSaveNow({ prompt:false }); } catch(e) { console.warn('save failed, continuing switch', e); }
@@ -3047,11 +3063,56 @@ async function wsInitWorkspaceManager() {
 }
 
 // Auto-save disabled: no periodic GitHub commits
-function wsStartAutoSave() { /* disabled */ }
+function wsStartAutoSave() {
+    try { if (wsAutoSaveTimer) clearInterval(wsAutoSaveTimer); } catch(e) {}
+    wsAutoSaveTimer = null;
+}
 
 
 // Auto-save: keep but it will call wsSaveNow (GitHub)
 
+
+
+// Ensure Workspace modal primary action works with async GitHub create/select
+async function wsModalPrimary() {
+    const name = (document.getElementById('ws-name').value || '').trim();
+    if (!name) { showAlert('Please enter a POD/Project name.'); return; }
+
+    if (wsModalMode === 'create') {
+        try {
+            if (wsCurrentId && wsIsDirty()) {
+                // optional: do not force-save; user can save manually
+            }
+            await wsCreateWorkspace(name);
+            wsSetIndicator(`Created: ${name}`, true);
+        } catch(e) {
+            console.error(e);
+            wsSetIndicator('Create failed (see console)', false);
+        }
+    } else if (wsModalMode === 'rename') {
+        const store = wsLoadStore();
+        if (!wsModalTargetId || !store.workspaces[wsModalTargetId]) return;
+        store.workspaces[wsModalTargetId].name = name;
+        store.workspaces[wsModalTargetId].updatedAt = new Date().toISOString();
+        wsSaveStore(store);
+        wsRefreshSelect();
+        wsSetIndicator(`Renamed: ${name}`, true);
+        // persist rename on next save
+    } else if (wsModalMode === 'duplicate') {
+        const store = wsLoadStore();
+        if (!wsModalTargetId || !store.workspaces[wsModalTargetId]) return;
+        const base = store.workspaces[wsModalTargetId];
+        try {
+            await wsCreateWorkspace(name, base.state);
+            wsSetIndicator(`Duplicated: ${name}`, true);
+        } catch(e) {
+            console.error(e);
+            wsSetIndicator('Duplicate failed (see console)', false);
+        }
+    }
+
+    wsCloseModal();
+}
 </script>
 
     <!-- Workspace Modal (NEW) -->
