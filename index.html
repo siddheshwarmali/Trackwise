@@ -1323,7 +1323,14 @@
         }
 
         function renderL2Details() {
-            const container = document.getElementById('l2-container');
+    // Guard against invalid L2 shapes (prevents intermittent failures)
+    if (!l2Data || typeof l2Data !== 'object' || Array.isArray(l2Data)) {
+        l2Data = { 'DMT': [], 'Tech': [], 'Content Mgmt.': [], 'QA': [] };
+    }
+    if (!Array.isArray(l2Columns) || l2Columns.length === 0) {
+        l2Columns = [ {id:'c1',name:'Col 1'},{id:'c2',name:'Col 2'},{id:'c3',name:'Col 3'} ];
+    }
+    const container = document.getElementById('l2-container');
             const content = document.getElementById('l2-content');
             if (!expandedDiscipline) { container.classList.add('hidden'); return; }
             container.classList.remove('hidden');
@@ -2534,7 +2541,7 @@ function renderBlockers() {
 window.onload = function() {
             lucide.createIcons();
             wsInitWorkspaceManager();
-            wsStartAutoSave();
+            // Auto-save disabled (manual Save only)
             const tmpl = document.getElementById('run-dashboard-template');
             if (tmpl) document.getElementById('run-iframe').srcdoc = tmpl.innerHTML;
             renderAll();
@@ -2590,11 +2597,140 @@ const gh6Get = (id) => gh6Request('GET', { dash: id });
 const gh6Save = (id, state) => gh6Request('POST', { dash: id }, { state });
 const gh6Delete = (id) => gh6Request('DELETE', { dash: id });
 
+// Prevent race conditions when switching dashboards quickly
+let gh6LoadSeq = 0;
+
+// Sanitize older/invalid stored states (keeps UI stable)
+function gh6SanitizeState(state) {
+    if (!state || typeof state !== 'object') return gh6BlankState();
+    state.executive = state.executive || {};
+    state.headless = state.headless || {};
+
+    // L2 Detailed Activities shape
+    const needL2Object = (!state.executive.l2Data || typeof state.executive.l2Data !== 'object' || Array.isArray(state.executive.l2Data));
+    if (needL2Object) {
+        state.executive.l2Data = { 'DMT': [], 'Tech': [], 'Content Mgmt.': [], 'QA': [] };
+    } else {
+        ['DMT','Tech','Content Mgmt.','QA'].forEach(k => { if (!Array.isArray(state.executive.l2Data[k])) state.executive.l2Data[k] = []; });
+    }
+    if (!Array.isArray(state.executive.l2Columns) || state.executive.l2Columns.length === 0) {
+        state.executive.l2Columns = [ {id:'c1',name:'Col 1'},{id:'c2',name:'Col 2'},{id:'c3',name:'Col 3'} ];
+    }
+
+    // L1 disciplines
+    if (!Array.isArray(state.executive.taskDisciplines) || state.executive.taskDisciplines.length === 0) {
+        state.executive.taskDisciplines = [
+            { discipline: 'DMT', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 },
+            { discipline: 'Tech', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 },
+            { discipline: 'Content Mgmt.', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 },
+            { discipline: 'QA', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 }
+        ];
+    }
+
+    // L3 tasks
+    if (!Array.isArray(state.executive.l3Data)) state.executive.l3Data = [];
+
+    // BAU
+    if (!state.executive.bauData || typeof state.executive.bauData !== 'object') {
+        state.executive.bauData = { totalTickets:0, withinSLA:0, breachedSLA:0, slaPercentage:0 };
+    }
+
+    return state;
+}
+
+// ---------- SAVE CONFIRM MODAL (GitHub Save) ----------
+let __wsSaveModalResolver = null;
+
+function wsIsDirty() {
+    try {
+        const ser = JSON.stringify(wsGetState());
+        return (wsLastSerialized !== null && ser !== wsLastSerialized);
+    } catch { return true; }
+}
+
+function wsOpenSaveConfirmModal(opts = {}) {
+    const mode = opts.mode || 'manual'; // manual | switch
+    const dashboardName = opts.dashboardName || '';
+
+    // Populate summary
+    const nameEl = document.getElementById('save-confirm-dash');
+    const ctxEl  = document.getElementById('save-confirm-context');
+    const detailsEl = document.getElementById('save-confirm-details');
+
+    if (nameEl) nameEl.textContent = dashboardName || '(Unnamed)';
+
+    const state = (typeof wsGetState === 'function') ? wsGetState() : { executive:{} };
+    const ex = (state && state.executive) ? state.executive : {};
+    const counts = {
+        milestones: (ex.milestones || []).length,
+        disciplines: (ex.taskDisciplines || []).length,
+        l2rows: (() => {
+            const l2 = ex.l2Data || {};
+            if (!l2 || typeof l2 !== 'object' || Array.isArray(l2)) return 0;
+            return Object.values(l2).reduce((a,arr) => a + (Array.isArray(arr) ? arr.length : 0), 0);
+        })(),
+        l3: (ex.l3Data || []).length,
+        stories: (ex.userStories || []).length,
+        bugs: (ex.bugs || []).length,
+        blockers: (ex.blockers || []).length,
+        kpis: (ex.kpiData || []).length
+    };
+
+    if (detailsEl) {
+        detailsEl.innerHTML = `
+            <div class="grid grid-cols-2 gap-2 text-xs text-gray-700">
+                <div class="bg-gray-50 rounded p-2 border">Milestones: <b>${counts.milestones}</b></div>
+                <div class="bg-gray-50 rounded p-2 border">L1 Disciplines: <b>${counts.disciplines}</b></div>
+                <div class="bg-gray-50 rounded p-2 border">L2 Detailed Rows: <b>${counts.l2rows}</b></div>
+                <div class="bg-gray-50 rounded p-2 border">L3 Tasks: <b>${counts.l3}</b></div>
+                <div class="bg-gray-50 rounded p-2 border">User Stories: <b>${counts.stories}</b></div>
+                <div class="bg-gray-50 rounded p-2 border">Bugs: <b>${counts.bugs}</b></div>
+                <div class="bg-gray-50 rounded p-2 border">Blockers: <b>${counts.blockers}</b></div>
+                <div class="bg-gray-50 rounded p-2 border">KPIs: <b>${counts.kpis}</b></div>
+            </div>
+        `;
+    }
+
+    // Context / buttons
+    const btnSave = document.getElementById('save-confirm-btn-save');
+    const btnSkip = document.getElementById('save-confirm-btn-skip');
+    const btnCancel = document.getElementById('save-confirm-btn-cancel');
+
+    if (ctxEl) {
+        ctxEl.textContent = (mode === 'switch')
+            ? 'You have unsaved changes. What do you want to do before switching dashboards?'
+            : 'Please verify the dashboard summary before saving to GitHub.';
+    }
+
+    if (btnSkip) btnSkip.classList.toggle('hidden', mode !== 'switch');
+
+    const modal = document.getElementById('modal-save-confirm');
+    if (modal) modal.classList.add('open');
+
+    return new Promise((resolve) => {
+        __wsSaveModalResolver = resolve;
+        if (btnSave) btnSave.onclick = () => wsCloseSaveConfirmModal('save');
+        if (btnSkip) btnSkip.onclick = () => wsCloseSaveConfirmModal('skip');
+        if (btnCancel) btnCancel.onclick = () => wsCloseSaveConfirmModal('cancel');
+    });
+}
+
+function wsCloseSaveConfirmModal(result) {
+    const modal = document.getElementById('modal-save-confirm');
+    if (modal) modal.classList.remove('open');
+    const r = __wsSaveModalResolver;
+    __wsSaveModalResolver = null;
+    if (typeof r === 'function') r(result);
+}
+
+
 // blank state builder - clears ALL major collections
 function gh6BlankState(name) {
     const st = (typeof wsGetState === 'function') ? wsGetState() : { executive:{}, headless:{} };
     st.executive = st.executive || {};
     st.headless = st.headless || {};
+
+    // Reset major collections
     st.executive.milestones = [];
     st.executive.userStories = [];
     st.executive.bugs = [];
@@ -2603,8 +2739,29 @@ function gh6BlankState(name) {
     st.executive.pendingDisciplineData = [];
     st.executive.profileToDisciplineMap = {};
     st.executive.tempAdoTasks = [];
-    st.executive.l2Data = [];
-    st.executive.bauData = { totalTickets:0, withinSLA:0, breachedSLA:0, slaPercentage:'0' };
+
+    // IMPORTANT: Keep shapes consistent (fixes "All Detailed Activities" intermittently breaking)
+    st.executive.l2Columns = [
+        { id:'c1', name:'Col 1' },
+        { id:'c2', name:'Col 2' },
+        { id:'c3', name:'Col 3' }
+    ];
+    st.executive.l2Data = {
+        'DMT': [],
+        'Tech': [],
+        'Content Mgmt.': [],
+        'QA': []
+    };
+
+    st.executive.l3Data = [];
+    st.executive.taskDisciplines = [
+        { discipline: 'DMT', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 },
+        { discipline: 'Tech', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 },
+        { discipline: 'Content Mgmt.', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 },
+        { discipline: 'QA', totalTasks: 0, openTasks: 0, closedTasks: 0, holdTasks: 0, grandTotal: 0 }
+    ];
+
+    st.executive.bauData = { totalTickets:0, withinSLA:0, breachedSLA:0, slaPercentage:0 };
     st.executive.expandedDiscipline = 'ALL';
     st.executive.activeUsStage = 'New';
     st.executive.activeBugStage = 'New';
@@ -2614,7 +2771,9 @@ function gh6BlankState(name) {
     st.executive.savedSummaryText = null;
     st.executive.adoSyncSource = null;
     st.executive.adoConfig = { organization:'', project:'', queryId:'' };
+
     st.headless.loadedTicketData = null;
+
     st.__meta = st.__meta || {};
     st.__meta.name = name || null;
     st.__meta.createdFrom = 'blank';
@@ -2645,14 +2804,26 @@ async function gh6SyncListIntoStore() {
     return list;
 }
 
-// Override select workspace: full reset + fetch
+// Override select workspace: full reset + fetch (race-safe)
 async function wsSelectWorkspace(id, { saveCurrent=true } = {}) {
     if (!id || id === wsCurrentId) return;
 
-    // Save current (to GitHub) before switch
-    if (saveCurrent && wsCurrentId) {
-        try { await wsSaveNow(); } catch(e) { console.warn('pre-save failed', e); }
+    // If current has unsaved changes, ask user
+    if (saveCurrent && wsCurrentId && wsIsDirty()) {
+        let name = '';
+        try {
+            const st = wsLoadStore();
+            name = (st.workspaces && st.workspaces[wsCurrentId] && st.workspaces[st.workspaces[wsCurrentId].id] && st.workspaces[wsCurrentId].name) || (st.workspaces[wsCurrentId] ? st.workspaces[wsCurrentId].name : '');
+        } catch(e) {}
+        const decision = await wsOpenSaveConfirmModal({ mode:'switch', dashboardName: name });
+        if (decision === 'cancel') return;          // abort switching
+        if (decision === 'save') {
+            try { await wsSaveNow({ prompt:false }); } catch(e) { console.warn('save failed, continuing switch', e); }
+        }
+        // decision === 'skip' => continue without saving
     }
+
+    const seq = ++gh6LoadSeq;
 
     wsCurrentId = id;
     gh6SetDashInUrl(id);
@@ -2668,29 +2839,79 @@ async function wsSelectWorkspace(id, { saveCurrent=true } = {}) {
     try {
         gh6Overlay(true, 'Fetching from GitHub...');
         const data = await gh6Get(id);
-        const state = data.state || null;
+        if (seq !== gh6LoadSeq || wsCurrentId !== id) return; // ignore stale response
+
+        const state = data.state ? gh6SanitizeState(data.state) : null;
         if (state) {
             wsApplyState(state, { silent:false });
+            wsLastSerialized = JSON.stringify(wsGetState());
             wsSetIndicator('Loaded ✓', true);
+
+            // Cache locally so if fetch fails later, we can still restore
+            try {
+                const store = wsLoadStore();
+                if (store.workspaces && store.workspaces[id]) {
+                    store.workspaces[id].state = state;
+                    store.workspaces[id].updatedAt = new Date().toISOString();
+                    wsSaveStore(store);
+                }
+            } catch(e) {}
         } else {
+            wsLastSerialized = JSON.stringify(wsGetState());
             wsSetIndicator('Empty dashboard', true);
         }
     } catch(e) {
         console.error(e);
-        wsSetIndicator('Load failed (see console)', false);
+        // Fallback to cached state if available
+        try {
+            const store = wsLoadStore();
+            const cached = store.workspaces && store.workspaces[id] ? store.workspaces[id].state : null;
+            if (cached) {
+                wsApplyState(gh6SanitizeState(cached), { silent:false });
+                wsLastSerialized = JSON.stringify(wsGetState());
+                wsSetIndicator('Loaded (cached) ✓', true);
+            } else {
+                wsSetIndicator('Load failed (see console)', false);
+            }
+        } catch(_) {
+            wsSetIndicator('Load failed (see console)', false);
+        }
     } finally {
-        gh6Overlay(false);
+        if (seq === gh6LoadSeq) gh6Overlay(false);
     }
 
     wsRefreshSelect();
 }
 
-// Override save: write to GitHub
-async function wsSaveNow() {
+// Override save: write to GitHub (with confirm popup)
+async function wsSaveNow(opts = {}) {
     if (wsIsApplying) return;
     if (!wsCurrentId) return;
+
+    // Manual saves should confirm; callers can set opts.prompt=false
+    const shouldPrompt = (typeof opts.prompt === 'boolean') ? opts.prompt : true;
+    if (shouldPrompt) {
+        let dashName = '';
+        try {
+            const store = wsLoadStore();
+            const w = store.workspaces && store.workspaces[wsCurrentId];
+            dashName = w && w.name ? w.name : wsCurrentId;
+        } catch(e) { dashName = wsCurrentId; }
+
+        const decision = await wsOpenSaveConfirmModal({ mode:'manual', dashboardName: dashName });
+        if (decision !== 'save') {
+            wsSetIndicator('Save cancelled', false);
+            return;
+        }
+    }
+
+    return wsSaveNowToGitHub();
+}
+
+async function wsSaveNowToGitHub() {
     const state = wsGetState();
-    // sync name
+
+    // sync name into meta
     try {
         const store = wsLoadStore();
         const w = store.workspaces && store.workspaces[wsCurrentId];
@@ -2705,7 +2926,18 @@ async function wsSaveNow() {
         if (res.commitUrl) console.log('[GitHub] Commit URL:', res.commitUrl);
         wsLastSerialized = JSON.stringify(state);
         wsSetIndicator('Saved ✓ ' + new Date().toLocaleTimeString(), true);
+
+        // refresh list + cache
         await gh6SyncListIntoStore();
+        try {
+            const store = wsLoadStore();
+            if (store.workspaces && store.workspaces[wsCurrentId]) {
+                store.workspaces[wsCurrentId].state = gh6SanitizeState(state);
+                store.workspaces[wsCurrentId].updatedAt = new Date().toISOString();
+                wsSaveStore(store);
+            }
+        } catch(_) {}
+
     } catch(e) {
         console.error(e);
         wsSetIndicator('Save failed (see console)', false);
@@ -2714,6 +2946,7 @@ async function wsSaveNow() {
         gh6Overlay(false);
     }
 }
+
 
 // Override create workspace: always create blank (reset) and save
 async function wsCreateWorkspace(name, baseState=null) {
@@ -2812,6 +3045,10 @@ async function wsInitWorkspaceManager() {
     gh6Overlay(false);
     wsStartAutoSave();
 }
+
+// Auto-save disabled: no periodic GitHub commits
+function wsStartAutoSave() { /* disabled */ }
+
 
 // Auto-save: keep but it will call wsSaveNow (GitHub)
 
