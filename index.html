@@ -2541,7 +2541,7 @@ function renderBlockers() {
 window.onload = function() {
             lucide.createIcons();
             wsInitWorkspaceManager();
-            wsStartAutoSave();
+            // Auto-save disabled (manual Save only)
             const tmpl = document.getElementById('run-dashboard-template');
             if (tmpl) document.getElementById('run-iframe').srcdoc = tmpl.innerHTML;
             renderAll();
@@ -2600,6 +2600,25 @@ const gh6Delete = (id) => gh6Request('DELETE', { dash: id });
 // Prevent race conditions when switching dashboards quickly
 let gh6LoadSeq = 0;
 
+// Build a stable serialization of state (removes volatile fields like capturedAt)
+function wsStableSerializeState(state) {
+    try {
+        const copy = JSON.parse(JSON.stringify(state || {}));
+        // capturedAt changes on every wsGetState() call; remove it to avoid false "dirty" detection
+        if (copy && 'capturedAt' in copy) delete copy.capturedAt;
+        return JSON.stringify(copy);
+    } catch(e) {
+        // Last-resort fallback
+        try {
+            const s = state || {};
+            if (s && 'capturedAt' in s) delete s.capturedAt;
+            return JSON.stringify(s);
+        } catch(_) {
+            return '';
+        }
+    }
+}
+
 // Sanitize older/invalid stored states (keeps UI stable)
 function gh6SanitizeState(state) {
     if (!state || typeof state !== 'object') return gh6BlankState();
@@ -2643,16 +2662,17 @@ let __wsSaveModalResolver = null;
 
 function wsIsDirty() {
     try {
-        const ser = JSON.stringify(wsGetState());
+        const ser = wsStableSerializeState(wsGetState());
+        // If wsLastSerialized not initialized yet, treat as not dirty
         return (wsLastSerialized !== null && ser !== wsLastSerialized);
-    } catch { return true; }
+    } catch { return false; }
 }
 
 function wsOpenSaveConfirmModal(opts = {}) {
     const mode = opts.mode || 'manual'; // manual | switch
     const dashboardName = opts.dashboardName || '';
 
-    // If modal is missing, fallback to native confirm (prevents Save button from "doing nothing")
+    // If modal is missing, fallback to native confirm
     const modal = document.getElementById('modal-save-confirm');
     if (!modal) {
         const ok = window.confirm(mode === 'switch'
@@ -2721,11 +2741,7 @@ function wsOpenSaveConfirmModal(opts = {}) {
         if (btnSave) btnSave.onclick = () => wsCloseSaveConfirmModal('save');
         if (btnSkip) btnSkip.onclick = () => wsCloseSaveConfirmModal('skip');
         if (btnCancel) btnCancel.onclick = () => wsCloseSaveConfirmModal('cancel');
-
-        // Safety: if any button missing, provide fallback close on ESC
-        window.onkeydown = (ev) => {
-            if (ev.key === 'Escape') wsCloseSaveConfirmModal('cancel');
-        };
+        window.onkeydown = (ev) => { if (ev.key === 'Escape') wsCloseSaveConfirmModal('cancel'); };
     });
 }
 
@@ -2823,7 +2839,7 @@ async function gh6SyncListIntoStore() {
 async function wsSelectWorkspace(id, { saveCurrent=true } = {}) {
     if (!id || id === wsCurrentId) return;
 
-    // If current has unsaved changes, ask user
+    // Ask ONLY if there are unsaved changes
     if (saveCurrent && wsCurrentId && wsIsDirty()) {
         let currentName = '';
         try {
@@ -2860,7 +2876,7 @@ async function wsSelectWorkspace(id, { saveCurrent=true } = {}) {
         const state = data.state ? gh6SanitizeState(data.state) : null;
         if (state) {
             wsApplyState(state, { silent:false });
-            wsLastSerialized = JSON.stringify(wsGetState());
+            wsLastSerialized = wsStableSerializeState(wsGetState());
             wsSetIndicator('Loaded ✓', true);
 
             // Cache locally so if fetch fails later, we can still restore
@@ -2873,7 +2889,7 @@ async function wsSelectWorkspace(id, { saveCurrent=true } = {}) {
                 }
             } catch(e) {}
         } else {
-            wsLastSerialized = JSON.stringify(wsGetState());
+            wsLastSerialized = wsStableSerializeState(wsGetState());
             wsSetIndicator('Empty dashboard', true);
         }
     } catch(e) {
@@ -2884,7 +2900,7 @@ async function wsSelectWorkspace(id, { saveCurrent=true } = {}) {
             const cached = store.workspaces && store.workspaces[id] ? store.workspaces[id].state : null;
             if (cached) {
                 wsApplyState(gh6SanitizeState(cached), { silent:false });
-                wsLastSerialized = JSON.stringify(wsGetState());
+                wsLastSerialized = wsStableSerializeState(wsGetState());
                 wsSetIndicator('Loaded (cached) ✓', true);
             } else {
                 wsSetIndicator('Load failed (see console)', false);
@@ -2904,7 +2920,6 @@ async function wsSaveNow(opts = {}) {
     if (wsIsApplying) return;
     if (!wsCurrentId) return;
 
-    // Manual saves should confirm; callers can set opts.prompt=false
     const shouldPrompt = (typeof opts.prompt === 'boolean') ? opts.prompt : true;
     if (shouldPrompt) {
         let dashName = '';
@@ -2940,7 +2955,7 @@ async function wsSaveNowToGitHub() {
     try {
         const res = await gh6Save(wsCurrentId, state);
         if (res.commitUrl) console.log('[GitHub] Commit URL:', res.commitUrl);
-        wsLastSerialized = JSON.stringify(state);
+        wsLastSerialized = wsStableSerializeState(state);
         wsSetIndicator('Saved ✓ ' + new Date().toLocaleTimeString(), true);
 
         // refresh list + cache
@@ -3080,9 +3095,6 @@ async function wsModalPrimary() {
 
     if (wsModalMode === 'create') {
         try {
-            if (wsCurrentId && wsIsDirty()) {
-                // optional: do not force-save; user can save manually
-            }
             await wsCreateWorkspace(name);
             wsSetIndicator(`Created: ${name}`, true);
         } catch(e) {
@@ -3097,7 +3109,6 @@ async function wsModalPrimary() {
         wsSaveStore(store);
         wsRefreshSelect();
         wsSetIndicator(`Renamed: ${name}`, true);
-        // persist rename on next save
     } else if (wsModalMode === 'duplicate') {
         const store = wsLoadStore();
         if (!wsModalTargetId || !store.workspaces[wsModalTargetId]) return;
