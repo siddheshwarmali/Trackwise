@@ -1,0 +1,150 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-50 p-6">
+  <div class="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl shadow p-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">User Manager</h1>
+        <p class="text-sm text-slate-500">Admin only • Create users with User ID + Password and role</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="me" class="text-xs text-slate-500"></span>
+        <a href="/" class="text-sm text-blue-600 hover:underline">Back</a>
+        <button id="logout" class="text-sm px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700">Logout</button>
+      </div>
+    </div>
+
+    <div id="err" class="hidden mt-4 text-sm bg-red-50 border border-red-200 text-red-800 rounded-lg p-3"></div>
+    <div id="ok" class="hidden mt-4 text-sm bg-green-50 border border-green-200 text-green-800 rounded-lg p-3"></div>
+
+    <div class="mt-6 grid md:grid-cols-3 gap-4 items-end">
+      <div>
+        <label class="text-xs text-slate-600">User ID</label>
+        <input id="newUserId" class="w-full border rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="text-xs text-slate-600">Password</label>
+        <input id="newPassword" type="password" class="w-full border rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="text-xs text-slate-600">Role</label>
+        <select id="newRole" class="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+          <option value="viewer">viewer</option>
+          <option value="creator">creator</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+      <div class="md:col-span-3 flex justify-end">
+        <button id="addUser" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm">Add / Update User</button>
+      </div>
+    </div>
+
+    <div class="mt-8">
+      <h2 class="text-sm font-semibold text-slate-700">Existing Users</h2>
+      <div class="mt-3 overflow-x-auto border rounded-xl">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50">
+            <tr>
+              <th class="text-left px-4 py-2">User ID</th>
+              <th class="text-left px-4 py-2">Role</th>
+              <th class="text-left px-4 py-2">Updated</th>
+              <th class="text-right px-4 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="userRows" class="divide-y"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const showErr = (t)=>{ const e=document.getElementById('err'); e.textContent=t; e.classList.remove('hidden'); document.getElementById('ok').classList.add('hidden'); };
+  const showOk  = (t)=>{ const e=document.getElementById('ok'); e.textContent=t; e.classList.remove('hidden'); document.getElementById('err').classList.add('hidden'); };
+
+  async function apiJson(url, options){
+    const r = await fetch(url, Object.assign({ headers:{'Content-Type':'application/json','Accept':'application/json'} }, options||{}));
+    const txt = await r.text();
+    let j={};
+    try{ j=JSON.parse(txt||'{}'); } catch { j={ error: txt }; }
+    if(!r.ok) throw new Error(j.error||j.message||txt||('HTTP '+r.status));
+    return j;
+  }
+
+  function rowTemplate(u){
+    const tr=document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-4 py-2 font-mono text-xs">${u.userId}</td>
+      <td class="px-4 py-2">
+        <select data-role class="border rounded px-2 py-1 text-xs">
+          <option value="viewer">viewer</option>
+          <option value="creator">creator</option>
+          <option value="admin">admin</option>
+        </select>
+      </td>
+      <td class="px-4 py-2 text-xs text-slate-500">${u.updatedAt || '-'}</td>
+      <td class="px-4 py-2 text-right">
+        <button data-save class="text-xs px-2 py-1 rounded bg-slate-100 border">Save</button>
+        <button data-reset class="text-xs px-2 py-1 rounded bg-amber-50 border border-amber-200 text-amber-800">Reset Password</button>
+        <button data-del class="text-xs px-2 py-1 rounded bg-red-50 border border-red-200 text-red-700">Delete</button>
+      </td>
+    `;
+    tr.querySelector('[data-role]').value = u.role;
+    tr.querySelector('[data-save]').onclick = async ()=>{
+      try{ await apiJson('/api/users', { method:'PUT', body: JSON.stringify({ userId:u.userId, role: tr.querySelector('[data-role]').value })}); showOk('Role updated'); await load(); }
+      catch(e){ showErr(e.message); }
+    };
+    tr.querySelector('[data-reset]').onclick = async ()=>{
+      const pw = prompt('Enter new password for ' + u.userId);
+      if(!pw) return;
+      try{ await apiJson('/api/users', { method:'PUT', body: JSON.stringify({ userId:u.userId, password: pw })}); showOk('Password reset'); }
+      catch(e){ showErr(e.message); }
+    };
+    tr.querySelector('[data-del]').onclick = async ()=>{
+      if(!confirm('Delete user ' + u.userId + '?')) return;
+      try{ await apiJson('/api/users', { method:'DELETE', body: JSON.stringify({ userId:u.userId })}); showOk('User deleted'); await load(); }
+      catch(e){ showErr(e.message); }
+    };
+    return tr;
+  }
+
+  async function load(){
+    const me = await apiJson('/api/auth/me', { method:'GET' });
+    if(!me.authenticated){ location.href='/login.html?next=' + encodeURIComponent(location.pathname); return; }
+    document.getElementById('me').textContent = (me.userId||'User') + ' • ' + (me.role||'');
+    if((me.role||'') !== 'admin') { showErr('Forbidden: Admin only'); return; }
+
+    const data = await apiJson('/api/users', { method:'GET' });
+    const tbody=document.getElementById('userRows');
+    tbody.innerHTML='';
+    (data.users||[]).forEach(u=>tbody.appendChild(rowTemplate(u)));
+  }
+
+  document.getElementById('addUser').onclick = async ()=>{
+    const userId = document.getElementById('newUserId').value.trim();
+    const password = document.getElementById('newPassword').value;
+    const role = document.getElementById('newRole').value;
+    if(!userId) return showErr('User ID is required');
+    if(!password) return showErr('Password is required');
+    try{
+      await apiJson('/api/users', { method:'POST', body: JSON.stringify({ userId, password, role })});
+      showOk('User saved');
+      document.getElementById('newUserId').value='';
+      document.getElementById('newPassword').value='';
+      document.getElementById('newRole').value='viewer';
+      await load();
+    }catch(e){ showErr(e.message); }
+  };
+
+  document.getElementById('logout').onclick = async ()=>{ try{ await apiJson('/api/auth/logout',{method:'POST'});}catch(e){} location.href='/login.html'; };
+
+  load().catch(e=>showErr(e.message));
+</script>
+</body>
+</html>
