@@ -49,6 +49,42 @@
       /* Hide Clear Storage button */
       button[onclick^="wsClearLocalStorage"], button[onclick="wsClearLocalStorage()"] { display:none !important; }
     </style>
+
+<script>
+  async function twJson(url, opt){
+    const r = await fetch(url, Object.assign({headers:{'Accept':'application/json','Content-Type':'application/json'}}, opt||{}));
+    const t = await r.text();
+    let j={};
+    try{ j=JSON.parse(t||'{}'); }catch{ j={error:t}; }
+    if(!r.ok) throw new Error(j.error||j.message||t||('HTTP '+r.status));
+    return j;
+  }
+
+  async function twInit(){
+    const pill=document.getElementById('tw-userpill');
+    const mgr=document.getElementById('tw-usermgr');
+    const lo=document.getElementById('tw-logout');
+    try{
+      const me = await twJson('/api/auth/me');
+      if(!me || !me.authenticated){
+        const next=encodeURIComponent(location.pathname+location.search+location.hash);
+        location.replace('/login.html?next='+next);
+        return;
+      }
+      const role = me.role || 'viewer';
+      document.body.classList.remove('role-admin','role-creator','role-viewer');
+      document.body.classList.add('role-'+role);
+      if(pill) pill.textContent = (me.userId||'User') + ' • ' + role;
+      if(mgr) mgr.classList.toggle('hidden', role!=='admin');
+      if(lo) lo.onclick = async ()=>{ try{ await twJson('/api/auth/logout', {method:'POST'});}catch(e){} location.href='/login.html'; };
+    }catch(e){
+      const next=encodeURIComponent(location.pathname+location.search+location.hash);
+      location.replace('/login.html?next='+next);
+    }
+  }
+  window.addEventListener('DOMContentLoaded', ()=>{ twInit(); });
+</script>
+
 </head>
 <body class="text-gray-800">
 
@@ -60,7 +96,14 @@
         </div>
 
         
-        <!-- Workspace Manager (NEW: Multi-dashboard + Local Save/Load) -->
+        
+<div id="tw-userbar" class="mb-4 flex flex-wrap items-center gap-2 justify-end">
+  <span id="tw-userpill" class="text-xs px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700">Checking login…</span>
+  <a id="tw-usermgr" href="/user-manager.html" class="hidden text-xs px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100">User Manager</a>
+  <button id="tw-logout" type="button" class="text-xs px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 hover:bg-red-100">Logout</button>
+</div>
+
+<!-- Workspace Manager (NEW: Multi-dashboard + Local Save/Load) -->
         <div class="bg-white rounded-lg shadow-md p-4 mb-6 animate-fade-in">
             <div class="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                 <div class="flex items-center gap-2 flex-wrap">
@@ -619,6 +662,42 @@
       /* Hide Clear Storage button */
       button[onclick^="wsClearLocalStorage"], button[onclick="wsClearLocalStorage()"] { display:none !important; }
     </style>
+
+<script>
+  async function twJson(url, opt){
+    const r = await fetch(url, Object.assign({headers:{'Accept':'application/json','Content-Type':'application/json'}}, opt||{}));
+    const t = await r.text();
+    let j={};
+    try{ j=JSON.parse(t||'{}'); }catch{ j={error:t}; }
+    if(!r.ok) throw new Error(j.error||j.message||t||('HTTP '+r.status));
+    return j;
+  }
+
+  async function twInit(){
+    const pill=document.getElementById('tw-userpill');
+    const mgr=document.getElementById('tw-usermgr');
+    const lo=document.getElementById('tw-logout');
+    try{
+      const me = await twJson('/api/auth/me');
+      if(!me || !me.authenticated){
+        const next=encodeURIComponent(location.pathname+location.search+location.hash);
+        location.replace('/login.html?next='+next);
+        return;
+      }
+      const role = me.role || 'viewer';
+      document.body.classList.remove('role-admin','role-creator','role-viewer');
+      document.body.classList.add('role-'+role);
+      if(pill) pill.textContent = (me.userId||'User') + ' • ' + role;
+      if(mgr) mgr.classList.toggle('hidden', role!=='admin');
+      if(lo) lo.onclick = async ()=>{ try{ await twJson('/api/auth/logout', {method:'POST'});}catch(e){} location.href='/login.html'; };
+    }catch(e){
+      const next=encodeURIComponent(location.pathname+location.search+location.hash);
+      location.replace('/login.html?next='+next);
+    }
+  }
+  window.addEventListener('DOMContentLoaded', ()=>{ twInit(); });
+</script>
+
 </head>
 <body>
 
